@@ -1,0 +1,20 @@
+# IDE 相关
+.vs/
+*.suo
+*.user
+*.json
+
+# Python 编译缓存
+__pycache__/
+*.py[cod]
+
+# 构建和分发目录
+build/
+dist/
+*.exe
+*.pkg
+
+# 可能的本地数据库/缓存文件
+*.db
+*.sqlite
+*.sqlite3
