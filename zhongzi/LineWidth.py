@@ -201,8 +201,8 @@ class LineWidthGUI:
         # --- 核心修改：如果是集成模式，直接使用父控件作为 root ---
         if parent is None:
             self.root = tk.Tk()
-            self.root.title("线宽测试 - 独立模式")
-            self.root.geometry("1000x700") 
+            self.root.title("线宽 - 独立模式")
+            self.root.geometry("1100x470") 
             self.root.resizable(True, True)
         else:
             self.root = parent # <--- 修改点：直接使用父 Frame

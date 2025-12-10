@@ -6,6 +6,7 @@ import struct
 import csv
 from datetime import datetime
 from io import BytesIO, StringIO
+import ctypes
 
 import pyvisa
 import numpy as np
@@ -21,6 +22,19 @@ import matplotlib.pyplot as plt
 from matplotlib.ticker import MaxNLocator
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg  # <-- 补全这个
 
+# 启用DPI感知，解决高DPI屏幕下界面模糊问题
+if os.name == 'nt':
+    try:
+        # 设置进程DPI感知
+        ctypes.windll.shcore.SetProcessDpiAwareness(1)
+        # 获取系统DPI
+        dpi = ctypes.windll.user32.GetDpiForSystem()
+        # 设置缩放因子
+        scaling_factor = dpi / 96.0
+    except Exception:
+        scaling_factor = 1.0
+else:
+    scaling_factor = 1.0
 
 # -----------------------------
 # Defaults - change to match your env
@@ -509,8 +523,8 @@ class Rin_4051_GUI:
         # --- 核心修改：如果是集成模式，直接使用父控件作为 root ---
         if parent is None:
             self.root = tk.Tk()
-            self.root.title("Rin (Ceyear 4051) - 独立模式")
-            self.root.geometry("1000x800")
+            self.root.title("Rin_4051 - 独立模式")
+            self.root.geometry("1350x370")
             self.root.resizable(True, True)
             # ... 其他窗口设置 ...
         else:
@@ -528,7 +542,7 @@ class Rin_4051_GUI:
         self.param_labels = {
             "IP_ADDRESS": "IP地址",
             "OUTPUT_DIR": "输出目录",
-            "DC_INPUT": "DC值 (会 /2)",
+            "DC_INPUT": "DC值",
             "AMPLIFICATION": "放大倍数",
             "POINTS": "采样点数",
         }

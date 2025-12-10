@@ -214,8 +214,8 @@ class TimeDomainGUI:
         # --- 核心修改：如果是集成模式，直接使用父控件作为 root ---
         if parent is None:
             self.root = tk.Tk()
-            self.root.title("时域测试 - 独立模式")
-            self.root.geometry("900x600") 
+            self.root.title("时域 - 独立模式")
+            self.root.geometry("1320x345") 
             self.root.resizable(True, True)
         else:
             self.root = parent # <--- 修改点：直接使用父 Frame

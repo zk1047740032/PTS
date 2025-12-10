@@ -253,8 +253,8 @@ class SpectrumSNRGUI:
         # --- 核心修改：如果是集成模式，直接使用父控件作为 root ---
         if parent is None:
             self.root = tk.Tk()
-            self.root.title("信噪比测试 - 独立模式")
-            self.root.geometry("900x600") 
+            self.root.title("信噪比 - 独立模式")
+            self.root.geometry("1250x370") 
             self.root.resizable(True, True)
         else:
             self.root = parent # <--- 修改点：直接使用父 Frame
