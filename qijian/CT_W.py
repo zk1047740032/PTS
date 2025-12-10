@@ -27,14 +27,8 @@ import matplotlib
 import matplotlib.ticker as mticker
 
 # 新增导入PIL库
-try:
-    from PIL import Image, ImageDraw, ImageFont, ImageTk
-except ImportError:
-    # 如果没有安装PIL，尝试使用PIL的旧名称
-    try:
-        import Image, ImageDraw, ImageFont, ImageTk
-    except ImportError:
-        raise ImportError("请安装Pillow库: pip install pillow")
+from PIL import Image, ImageDraw, ImageFont, ImageTk
+
 
 matplotlib.use("TkAgg")
 import matplotlib.pyplot as plt

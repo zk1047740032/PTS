@@ -18,13 +18,7 @@ import matplotlib
 import matplotlib.ticker as mticker
 from pyvisa.errors import VisaIOError
 # PIL
-try:
-    from PIL import Image, ImageDraw, ImageFont, ImageTk
-except ImportError:
-    try:
-        import Image, ImageDraw, ImageFont, ImageTk
-    except Exception:
-        raise ImportError("请安装Pillow库: pip install pillow")
+from PIL import Image, ImageDraw, ImageFont, ImageTk
 
 matplotlib.use("TkAgg")
 import matplotlib.pyplot as plt
