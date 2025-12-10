@@ -46,9 +46,9 @@ class SignalGenerator:
             self.inst.write(f":SOUR1:FUNC {waveform}")
             self.log(f"[信号源] 设置波形: {waveform}")
             
-            # 设置频率（单位：kHz）
-            self.inst.write(f":SOUR1:FREQ {freq}kHz")
-            self.log(f"[信号源] 设置频率: {freq} kHz")
+            # 设置频率（单位：Hz）
+            self.inst.write(f":SOUR1:FREQ {freq}Hz")
+            self.log(f"[信号源] 设置频率: {freq} Hz")
             
             # 设置幅值（单位：Vpp）
             self.inst.write(f":SOUR1:VOLT {volt}")
@@ -454,7 +454,7 @@ class LineWidthGUI:
                     signal_gen = SignalGenerator(log_callback=self.log)
                     signal_gen.connect(self.params['信号发生器IP'])
                     
-                    # 配置信号发生器：正弦波、频率0.1kHz、幅值0vpp、偏移1vdc
+                    # 配置信号发生器：正弦波、频率0.1Hz、幅值0vpp、偏移1vdc
                     signal_gen.configure(waveform="SIN", freq=0.1, volt=0, offset=1)
                     
                     # 打开信号发生器输出

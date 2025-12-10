@@ -433,26 +433,54 @@ class RinAnalyzer:
         except Exception as e:
             self.log(f"[保存] 生成自动保存路径失败: {e}")
 
-        # 获取三段曲线最高点 + 指定频点的RIN值
         target_xs = [1000, 10000, 100000, 1000000]
 
-        # 将驰豫振荡峰的检测范围限制在 1e5 - 8e6 Hz
+        # 1. 修改检测范围为 1e5 到 1e7 Hz
         relax_start = 1e5
-        relax_stop = 8e6
+        relax_stop = 1e7
 
-        # 根据整个频率数组筛选出位于检测范围内的索引
         freqs = np.array(self.ddx)
         ys = np.array(self.ddy)
+        
+        # 筛选出范围内的有效数据
         mask = (freqs >= relax_start) & (freqs <= relax_stop) & np.isfinite(ys)
+        
+        highest_rin = float('nan')
+        peak_freq = float('nan')
+
         if np.any(mask):
             masked_freqs = freqs[mask]
             masked_ys = ys[mask]
-            max_idx = np.argmax(masked_ys)
-            highest_rin = float(masked_ys[max_idx])
-            peak_freq = float(masked_freqs[max_idx])
-        else:
-            highest_rin = float('nan')
-            peak_freq = float('nan')
+            
+            # 2. 寻找“凸起”部分（局部最大值）
+            # 只有数据点足够时才进行形态判断
+            if len(masked_ys) >= 3:
+                # 比较每个点是否比左右邻居都大
+                center_vals = masked_ys[1:-1]
+                left_vals = masked_ys[:-2]
+                right_vals = masked_ys[2:]
+                
+                # 找到所有局部峰值的布尔掩码
+                is_peak = (center_vals > left_vals) & (center_vals > right_vals)
+                
+                if np.any(is_peak):
+                    # 获取局部峰值在 masked_ys 中的索引 (+1是因为切片从1开始)
+                    peak_indices = np.where(is_peak)[0] + 1
+                    
+                    # 在所有局部峰值中，找出 RIN 值最大的那个
+                    best_peak_idx = peak_indices[np.argmax(masked_ys[peak_indices])]
+                    highest_rin = float(masked_ys[best_peak_idx])
+                    peak_freq = float(masked_freqs[best_peak_idx])
+                else:
+                    # 如果区间内没有“凸起”（例如单调上升或下降），回退到取最大值
+                    max_idx = np.argmax(masked_ys)
+                    highest_rin = float(masked_ys[max_idx])
+                    peak_freq = float(masked_freqs[max_idx])
+            else:
+                # 点数太少无法判断形态，直接取最大值
+                max_idx = np.argmax(masked_ys)
+                highest_rin = float(masked_ys[max_idx])
+                peak_freq = float(masked_freqs[max_idx])
 
         # 拼接弹窗文本（显示峰值及若干指定频点的值）
         result_text = f"驰豫振荡峰 ({int(relax_start):d} - {int(relax_stop):d} Hz): {highest_rin:.3f} dBc/Hz @ {peak_freq:.0f} Hz\n\n"
@@ -807,7 +835,7 @@ class RinGUI:
         # --- 核心修改：如果是集成模式，直接使用父控件作为 root ---
         if parent is None:
             self.root = tk.Tk()
-            self.root.title("Rin (FSV3004) - 独立模式")
+            self.root.title("Rin_FSV3004 - 独立模式")
             self.root.geometry("1170x630")
             self.root.resizable(True, True)
             try:
@@ -816,7 +844,7 @@ class RinGUI:
                 pass
             # 假设 set_center() 只有在独立模式下需要
             if hasattr(self, 'set_center'):
-                self.set_center(1170, 630) 
+                self.set_center(1170, 330) 
         else:
             self.root = parent # <--- 修改点：直接使用父 Frame
 
