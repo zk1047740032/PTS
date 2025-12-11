@@ -584,7 +584,7 @@ class IntegratedPlatform:
 if __name__ == "__main__":
     # 多进程支持（如果底层脚本用到）
     import multiprocessing
-    # multiprocessing.freeze_support() # 仅在打包EXE时需要
+    multiprocessing.freeze_support() # 仅在打包EXE时需要
 
     root = tk.Tk()
     app = IntegratedPlatform(root)
