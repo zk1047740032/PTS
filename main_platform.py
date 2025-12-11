@@ -110,8 +110,16 @@ class IntegratedPlatform:
         self.paned_window.pack(fill=tk.BOTH, expand=True)
 
         # === 左侧：测试项选择区域 (Left Panel) ===
-        self.left_panel = tk.Frame(self.paned_window, bg="#ffffff", width=250)
-        self.paned_window.add(self.left_panel, weight=1)
+        # width=250 是初始宽度
+        self.left_panel = tk.Frame(self.paned_window, bg="#ffffff", width=380)
+        
+        # 【关键修改】禁止 Frame 根据内部子控件自动调整大小
+        # 这样即使内部控件内容很少或很多，Frame 都会保持设定的 width=250
+        self.left_panel.pack_propagate(False) 
+        self.left_panel.grid_propagate(False)
+
+        # weight=0: 窗口拉伸时不分配额外空间给左侧
+        self.paned_window.add(self.left_panel, weight=0)
 
         # 标题
         tk.Label(self.left_panel, text="测试项目", bg="#ffffff", 
@@ -180,7 +188,7 @@ class IntegratedPlatform:
 
         # === 右侧：测试内容显示区域 (Right Panel - Notebook) ===
         self.right_panel = tk.Frame(self.paned_window, bg="white")
-        self.paned_window.add(self.right_panel, weight=10)
+        self.paned_window.add(self.right_panel, weight=1)  # weight=1 表示右侧自动伸缩填充
         
         # 右侧采用页签式设计
         self.notebook = ttk.Notebook(self.right_panel)
@@ -581,3 +589,4 @@ if __name__ == "__main__":
     root = tk.Tk()
     app = IntegratedPlatform(root)
     root.mainloop()
+    # pyinstaller package.spec
