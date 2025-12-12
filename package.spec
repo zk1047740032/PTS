@@ -3,7 +3,7 @@
 block_cipher = None
 
 a = Analysis(['main_platform.py'],
-             pathex=['d:\Coding\Project\PreciTestSystem\A.release'],
+             pathex=['d:\Coding\Project\PreciTestSystem\PTS'],
              binaries=[],
              datas=[('PreciLasers.ico', '.')],
              hiddenimports=['pyvisa', 'matplotlib.backends.backend_tkagg', 'PIL._tkinter_finder'],
