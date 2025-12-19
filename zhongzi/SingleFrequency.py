@@ -279,7 +279,7 @@ class SingleFrequency:
         self.write(self.CMD['trace_clear'])
         self.write(self.CMD['init_once'])
         self.log("[频谱仪] 已触发一次扫频")
-        time.sleep(1.7)
+        time.sleep(2.5)
         self.opc(label)
         #time.sleep(1.4)
 
@@ -1399,3 +1399,4 @@ class SingleFrequencyGUI:
 if __name__ == '__main__':
     gui = SingleFrequencyGUI()
     gui.run()
+# pyinstaller -F -w "d:\Coding\Project\PreciTestSystem\PTS\zhongzi\SingleFrequency.py"

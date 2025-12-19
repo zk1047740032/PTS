@@ -276,12 +276,41 @@ class SingleFrequency:
             self.log(f"[错误] 设置扫描时间失败: {e}")
 
     def sweep_once(self, label='扫频'):
-        self.write(self.CMD['trace_clear'])
-        self.write(self.CMD['init_once'])
-        self.log("[频谱仪] 已触发一次扫频")
-        time.sleep(1.7)
-        self.opc(label)
-        #time.sleep(1.4)
+        """
+        改进后的同步扫频逻辑：
+        1. 强制关闭连续扫（防止仪器多扫或乱跳）
+        2. 发送触发指令
+        3. 使用 *OPC? 阻塞等待，直到仪器真正完成
+        """
+        try:
+            # 1. 确保处于单次扫描模式（关键！否则 OPC 查询可能失效或立即返回）
+            self.write(':INITiate:CONTinuous OFF')
+            
+            # 2. 清除 Trace 数据，防止读到旧的
+            self.write(self.CMD['trace_clear'])
+            
+            # 3. 触发扫描 (在平均开启时，这会启动完整的一组平均)
+            self.write(self.CMD['init_once'])
+            #self.log(f"[频谱仪] 已触发一次扫频")
+            
+            # 4. 阻塞等待完成
+            # 临时增加超时时间：因为平均2次+处理时间可能超过默认超时
+            # 假设你设置扫频时间1s，平均2次，物理耗时至少2.5s以上。这里给10秒很安全。
+            current_timeout = self.sa.timeout
+            self.sa.timeout = 15000  # 临时设置为 15 秒 (单位毫秒)
+            
+            # 发送查询，程序会在这里“卡住”，直到仪器扫完
+            self.query('*OPC?')
+            
+            # 还原超时时间
+            self.sa.timeout = current_timeout
+            
+            # self.log(f"[频谱仪] {label} 同步完成")
+            
+        except Exception as e:
+            self.log(f"[错误] 扫频同步超时或失败: {e}")
+            # 如果超时，发送中止指令让仪器停下来
+            self.write(self.CMD['abort'])
 
     # def set_detector(self, mode: str = "RMS"):
     #     """设置检波器模式 (POS / NEG / SAMP / RMS)"""
@@ -760,84 +789,6 @@ class SingleFrequencyGUI:
         win.geometry(f"+{x}+{y}")
 
     # —— 频谱扫描工具函数 ——
-    def _coarse_scan_and_check(self, sa: 'SingleFrequency', p: dict,
-                               tag: str, out_dir: str) -> tuple[bool, str | None]:
-        """执行一次全带宽粗扫；若发现异常峰 -> 保存&弹窗 -> 返回(True, png)。否则返回(False, None)。"""
-        if self.stop_flag.is_set():
-            raise KeyboardInterrupt
-        self.log('[粗扫] 全频带，最大保持…')
-        sa.set_sweep_type('DYN') # 动态范围优先
-        sa.set_sweep_time(5) # 5秒扫完
-        sa.set_trace_mode(max_hold=True)
-
-        # === 等待稳定阶段 ===
-        sa.sweep_continuous_on("等待稳定")   # 开启连续扫，只让仪器扫，不取数据
-
-        same = 0
-        last_val = None
-        tol = 0.001
-        consec_ok = 3
-        max_wait = 300.0
-        interval = 0.01
-
-        t0 = time.time()
-        t0 = time.time()
-        while time.time() - t0 < max_wait:
-            # pause support
-            if getattr(self, 'pause_flag', None) and self.pause_flag.is_set():
-                self._pause_point()
-            if self.stop_flag.is_set():
-                break
-
-            wl = self.lc.get_wavelength_nm()
-            if wl is None:
-                time.sleep(interval)
-                continue
-
-            if last_val is not None and abs(wl - last_val) < tol:
-                same += 1
-                if same >= consec_ok:
-                    self.log(f"[等待稳定] 波长已稳定 (连续{consec_ok}次Δ<{tol}nm)")
-                    break
-            else:
-                same = 0
-
-            last_val = wl
-            if same > 0:  # 只在有连续稳定计数时打印日志
-                self.log(f"[等待稳定] 当前波长 {wl:.4f} nm, 已连续稳定 {same}/{consec_ok}")
-            time.sleep(interval)
-
-        # === 稳定后 ===
-        try:
-            sa.sweep_continuous_off("等待稳定结束")
-            time.sleep(0.5)  # 等待状态切换稳定
-            sa.query_opc(timeout=5000)   # 等待确认仪器已准备好
-        except Exception as e:
-            self.log(f"[粗扫] 关闭连续扫失败: {e}")
-            return False, None
-        sa.set_bw(rbw_hz=100.0 * 1e3)
-        sa.set_freq_span(start=0.0 * 1e6,
-                        stop=18000.0 * 1e6)
-
-        sa.sweep_once(f'粗扫@{tag}')   # 再来一次完整的单扫，数据才是完整的
-        time.sleep(0.5)  # 给仪器一点时间写入 trace buffer
-        x, y = sa.get_trace_xy()
-        # 粗扫峰值检测参数
-        coarse_peak = PeakDetector(thresh_db=float(p['粗扫峰值阈值(dB)']), prom_db=float(p['粗扫邻域显著性(dB)']), guard=int(p['粗扫邻域点数']), log_func=self.log)
-        peaks = coarse_peak.find(x, y)
-        rbw_used = sa.last_rbw_hz if getattr(sa, 'last_rbw_hz', None) else 100.0 * 1e3
-
-        if peaks:
-            csvp, pngp, peakcsv = coarse_peak.save_csv_png(x, y, peaks, out_dir,
-                                                    f'coarse_{tag}', rbw_hz=rbw_used)
-            self.log(f"[粗扫] 发现异常峰 {len(peaks)} 个 -> 保存并终止")
-            self.root.after(0, lambda: self.show_image_popup(pngp, title=f"粗扫异常：{tag}"))
-            return True, pngp
-
-        return False, None
-
-
-
     def _wait_wavelength_stable(self, p: dict, context: str = "") -> bool:
         """等待波长稳定
         返回: True 表示达到稳定，False 表示超时未稳定
@@ -876,241 +827,6 @@ class SingleFrequencyGUI:
 
         self.log(f"[等待稳定{context}] 超时未稳定")
         return False
-
-    def _fine_scan_and_check(self, sa: 'SingleFrequency', peak: 'PeakDetector', p: dict,
-                              tag: str, out_dir: str) -> tuple[bool, str | None]:
-        """细扫 step 扫描；发现异常继续扫描；返回 (found, png_path)。"""
-        if self.stop_flag.is_set():
-            raise KeyboardInterrupt
-        sa.set_sweep_type('SPD') # 速度优先
-        sa.set_sweep_time(1) # 1秒扫完
-        sa.set_trace_mode(max_hold=False)
-        sa.set_detector("POS")   # 细扫时用峰值检波（更适合检测窄峰）
-        span = float(p['细扫跨度(MHz)']) * 1e6
-        step = float(p['细扫步进(MHz)']) * 1e6
-        f_start = float(p['起始频率(MHz)']) * 1e6
-        f_stop = float(p['终止频率(MHz)']) * 1e6
-        center = f_start + span / 2.0
-        
-        # 先设置频宽为500MHz，再设置RBW为30kHz，避免耦合问题
-        sa.set_freq_span(center=center, span=span)
-        sa.set_bw(rbw_hz=float(p['细扫RBW(kHz)']) * 1e3)
-        
-        idx = 0
-        found = False
-        last_pngp = None  # 保存最后一个异常的图片路径
-        while center - span / 2.0 < f_stop:
-            # pause support
-            if getattr(self, 'pause_flag', None) and self.pause_flag.is_set():
-                self._pause_point()
-            if self.stop_flag.is_set():
-                raise KeyboardInterrupt
-            # sa.set_freq_span(center=center, span=span)
-            # sa.set_sweep_time(1) # 1秒扫完
-            for repeat in range(1):
-                sa.set_freq_span(center=center, span=span)
-                sa.set_sweep_time(1) # 1秒扫完
-                sa.sweep_once(f'细扫@{center/1e9:.3f}GHz')
-                #time.sleep(2.8)
-                x, y = sa.get_trace_xy()
-                
-                # 添加调试信息：显示当前扫描的频率范围和数据统计
-                self.log(f"[细扫调试] 中心频率: {center/1e9:.3f} GHz, 跨度: {span/1e6:.0f} MHz")
-                self.log(f"[细扫调试] 数据点数量: {len(x)}, 功率范围: {min(y):.2f} ~ {max(y):.2f} dBm")
-                
-                peaks = peak.find(x, y)
-                if peaks:
-                    found = True
-                    tag2 = f"fine_{tag}_{int(center/1e6)}MHz"
-                    rbw_used = sa.last_rbw_hz if getattr(sa, 'last_rbw_hz', None) else float(p['细扫RBW(kHz)']) * 1e3
-                    csvp, pngp, peakcsv = peak.save_csv_png(x, y, peaks, out_dir, tag2, rbw_hz=rbw_used)
-                    last_pngp = pngp  # 更新最后一个异常的图片路径
-                    self.log(f"[细扫] 命中异常峰，保存：{tag2}.csv/.png/_peaks.csv -> 继续扫描")
-                    self.root.after(0, lambda: self.show_image_popup(pngp, title=f"细扫异常：{center/1e9:.3f} GHz"))
-                    break
-            center += step
-            idx += 1
-            #time.sleep(0.5)
-            if idx % 5 == 0:
-                self.log(f"[细扫] 进度：center≈{center/1e9:.3f} GHz")
-        if found:
-            self.log('[细扫] 完成扫描，发现异常峰')
-            return True, last_pngp
-        else:
-            self.log('[细扫] 完成扫描，未发现异常峰')
-            return False, None
-
-    def _continuous_coarse_monitor_until_stable(self, sa: 'SingleFrequency', p: dict,
-                                                out_dir: str, tag: str,
-                                                lc: 'LaserController', stable_params: dict) -> bool:
-        """
-        在等待稳定期间使用连续扫（CONT ON）监测。
-        返回 True 表示在稳定前发现异常峰（已经保存并弹窗）；False 表示达到稳定（或超时未发现异常）。
-        """
-        mode = stable_params.get('mode', 'wavelength')
-        poll = float(stable_params.get('poll', 0.1))
-        max_wait = float(stable_params.get('max_wait', 300.0))
-        consec_ok = int(stable_params.get('consec_ok', 1))
-        tol = float(stable_params.get('tol', 0.01))
-        delay_s = float(stable_params.get('delay_s', 1.5))
-
-        # 先把粗扫参数写到仪器上（RBW / span）
-        sa.set_bw(rbw_hz=100.0 * 1e3)
-        sa.set_freq_span(start=0.0 * 1e6, stop=18250.0 * 1e6)
-        # 用最大保持模式更容易在连续扫期间看到短时突发峰（如果你想每次只看当前扫，改为 max_hold=False）
-        sa.set_trace_mode(max_hold=True)
-
-        # 清理旧数据（再尝试）
-        try:
-            sa.write(sa.CMD.get('trace_clear', ':TRACe:CLEAr\n'))
-        except Exception:
-            pass
-
-        t0 = time.time()
-        last_check = 0.0
-        same = 0
-        last_val = None
-        idx = 0
-        found = False
-        detected_peaks = set()  # 记录已检测到的峰值频率（用于去重）
-        peak_tolerance = 1.0e6  # 峰值频率容差（±1MHz视为同一峰值）
-
-        # 尝试开启连续扫描；若不支持则fallback回原先的单扫循环（避免完全失败）
-        try:
-            sa.sweep_continuous_on(f"{tag}_monitor")
-        except Exception as e:
-            self.log(f"[监测] 无法开启连续扫（回退为单次扫）：{e}")
-            # fallback：重复单次扫 + 波长稳定检查（原有行为）
-            while time.time() - t0 < (delay_s if mode == 'delay' else max_wait):
-                # pause support
-                if getattr(self, 'pause_flag', None) and self.pause_flag.is_set():
-                    self._pause_point()
-                if self.stop_flag.is_set():
-                    raise KeyboardInterrupt
-                if time.time() - last_check > poll:
-                    if self._coarse_scan_and_check(sa, p, tag=f"{tag}_fallback_{idx}", out_dir=out_dir)[0]:
-                        return True
-                    last_check = time.time()
-                    idx += 1
-                if mode != 'delay':
-                    v = self.lc.get_wavelength_nm()
-                    if v is None:
-                        time.sleep(0.5)
-                        continue
-                    if last_val is not None and abs(v - last_val) < tol:
-                        same += 1
-                        if same >= consec_ok:
-                            return False
-                    else:
-                        same = 0
-                    last_val = v
-            return False
-
-        try:
-            if mode == 'delay':
-                # 仅在 delay_s 时间内监测异常峰
-                while time.time() - t0 < delay_s:
-                    # pause support
-                    if getattr(self, 'pause_flag', None) and self.pause_flag.is_set():
-                        self._pause_point()
-                    if self.stop_flag.is_set():
-                        raise KeyboardInterrupt
-                    if time.time() - last_check >= poll:
-                        try:
-                            x, y = sa.get_trace_xy()
-                        except Exception as e:
-                            self.log(f"[监测] 读取谱线失败（继续重试）：{e}")
-                            time.sleep(min(0.1, poll))
-                            continue
-                        # 粗扫峰值检测参数（监测阶段使用粗扫参数）
-                        coarse_peak = PeakDetector(thresh_db=float(p['粗扫峰值阈值(dB)']), prom_db=float(p['粗扫邻域显著性(dB)']), guard=int(p['粗扫邻域点数']), log_func=self.log)
-                        peaks = coarse_peak.find(x, y)
-                        if peaks:
-                            # 检查是否有新的未检测过的峰值
-                            new_peaks = []
-                            for peak in peaks:
-                                freq = peak[0]
-                                # 计算峰值频率的近似值（以容差为单位）
-                                approx_freq = round(freq / peak_tolerance) * peak_tolerance
-                                if approx_freq not in detected_peaks:
-                                    new_peaks.append(peak)
-                                    detected_peaks.add(approx_freq)
-                            
-                            if new_peaks:
-                                rbw_used = sa.last_rbw_hz if getattr(sa, 'last_rbw_hz', None) else 100.0 * 1e3
-                                csvp, pngp, peakcsv = coarse_peak.save_csv_png(x, y, new_peaks, out_dir, f'cont_{tag}_{idx}', rbw_hz=rbw_used)
-                                self.log(f"[监测] 稳定前发现异常峰 -> 保存 ({pngp})")
-                                self.root.after(0, lambda p=pngp: self.show_image_popup(p, title=f"稳定前异常：{tag}"))
-                                found = True
-                            else:
-                                self.log(f"[监测] 检测到已记录的峰值，跳过保存")
-                        
-                        last_check = time.time()
-                        idx += 1
-                    time.sleep(0.01)
-                return found
-            else:
-                # 通过波长收敛次数判断稳定，同时持续检测 trace
-                while time.time() - t0 < max_wait:
-                    # pause support
-                    if getattr(self, 'pause_flag', None) and self.pause_flag.is_set():
-                        self._pause_point()
-                    if self.stop_flag.is_set():
-                        raise KeyboardInterrupt
-                    if time.time() - last_check >= poll:
-                        try:
-                            x, y = sa.get_trace_xy()
-                        except Exception as e:
-                            self.log(f"[监测] 读取谱线失败（继续）：{e}")
-                            time.sleep(min(0.1, poll))
-                            continue
-                        # 粗扫峰值检测参数（监测阶段使用粗扫参数）
-                        coarse_peak = PeakDetector(thresh_db=float(p['粗扫峰值阈值(dB)']), prom_db=float(p['粗扫邻域显著性(dB)']), guard=int(p['粗扫邻域点数']), log_func=self.log)
-                        peaks = coarse_peak.find(x, y)
-                        if peaks:
-                            # 检查是否有新的未检测过的峰值
-                            new_peaks = []
-                            for peak in peaks:
-                                freq = peak[0]
-                                # 计算峰值频率的近似值（以容差为单位）
-                                approx_freq = round(freq / peak_tolerance) * peak_tolerance
-                                if approx_freq not in detected_peaks:
-                                    new_peaks.append(peak)
-                                    detected_peaks.add(approx_freq)
-                            
-                            if new_peaks:
-                                rbw_used = sa.last_rbw_hz if getattr(sa, 'last_rbw_hz', None) else 100.0 * 1e3
-                                csvp, pngp, peakcsv = coarse_peak.save_csv_png(x, y, new_peaks, out_dir, f'cont_{tag}_{idx}', rbw_hz=rbw_used)
-                                self.log(f"[监测] 稳定前发现异常峰 -> 保存并终止 ({pngp})")
-                                self.root.after(0, lambda p=pngp: self.show_image_popup(p, title=f"稳定前异常：{tag}"))
-                                found = True
-                            else:
-                                self.log(f"[监测] 检测到已记录的峰值，跳过保存")
-                
-                        last_check = time.time()
-                        idx += 1
-
-                    # 波长稳定性判据（和你原来的逻辑一致）
-                    v = self.lc.get_wavelength_nm()
-                    if v is None:
-                        time.sleep(0.5)
-                        continue
-                    if last_val is not None and abs(v - last_val) < tol:
-                        same += 1
-                        if same >= consec_ok:
-                            # 达到稳定：退出（found False）
-                            return False
-                    else:
-                        same = 0
-                    last_val = v
-                    time.sleep(0.01)
-                return found
-        finally:
-            # 不管怎样，都尝试关闭连续扫，保证状态干净
-            try:
-                sa.sweep_continuous_off(f"{tag}_monitor")
-            except Exception as e:
-                self.log(f"[监测] 关闭连续扫失败（忽略）：{e}")
 
     # —— 主流程 ——
     def _run(self):
@@ -1164,7 +880,8 @@ class SingleFrequencyGUI:
             sa.write(":TRACe1:MODE WRITe")                  # 强制 Clear Write 模式（只显示当前扫）
             sa.write(":TRACe:CLEar TRACE1")                 # 清空历史残留
             sa.set_trace_mode(max_hold=False)               # 关闭 MaxHold
-            sa.set_avg(on=True, count=2)                   # 强制开2次平均
+            sa.write(":INITiate:CONTinuous OFF")            # 【新增】确保关闭连续扫
+            sa.set_avg(on=True, count=2)                    # 强制开2次平均
             sa.set_detector("RMS", trace=1)                 # RMS 检波 + 平均 = 超级细线
             sa.write(":BANDwidth:VIDeo:RATIO 1")            # VBW 强制 = RBW（去毛刺）
             sa.set_sweep_type('SPD')                        # 速度优先
@@ -1275,6 +992,7 @@ class SingleFrequencyGUI:
                 for repeat in range(2):
                     sa.set_sweep_time(1)
                     sa.sweep_once(f'细扫@{center/1e9:.3f}GHz')
+                    self.log(f"细扫@{center/1e9:.3f}GHz")
                     x, y = sa.get_trace_xy()
                     
                     # 细扫峰值检测
@@ -1399,3 +1117,4 @@ class SingleFrequencyGUI:
 if __name__ == '__main__':
     gui = SingleFrequencyGUI()
     gui.run()
+# pyinstaller -F -w "d:\Coding\Project\PreciTestSystem\PTS\test\SingleFrequency.py"
