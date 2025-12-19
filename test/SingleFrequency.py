@@ -552,7 +552,7 @@ class SingleFrequencyGUI:
         if parent is None:
             self.root = tk.Tk()
             self.root.title("单频 - 独立模式")
-            self.root.geometry("1480x930") 
+            self.root.geometry("1480x970") 
             self.root.resizable(True, True)
         else:
             self.root = parent # <--- 修改点：直接使用父 Frame
@@ -565,6 +565,9 @@ class SingleFrequencyGUI:
             # 上位机
             '上位机路径': r'C:\PTS\zhongzi\SingleFrequency\shangweiji\Preci-Seed.exe',
             '窗口标题(正则)': r'Preci_Fiber_DFB_2Diode.*',
+
+            # 测试时长
+            '测试时长(分钟)': 30.0,
 
             # 温度参数
             '温度上限(°C)': 56.0,
@@ -592,6 +595,9 @@ class SingleFrequencyGUI:
             # 上位机
             '上位机路径': r'C:\PTS\zhongzi\SingleFrequency\shangweiji\Preci-Seed.exe',
             '窗口标题(正则)': r'Preci_Fiber_DFB_2Diode.*',
+
+            # 测试时长
+            '测试时长(分钟)': 30.0,
 
             # 温度参数
             '温度上限(°C)': 56.0,
@@ -622,6 +628,12 @@ class SingleFrequencyGUI:
         self.stop_flag = threading.Event()
         self.pause_flag = threading.Event()
         self.worker = None
+        
+        # 统计计数器
+        self.current_cycle_count = 0
+        self.temperature_cycle_count = 0
+        self.sweep_count = 0
+        self.peak_count = 0
 
     # —— UI ——
     def _build_ui(self):
@@ -636,6 +648,31 @@ class SingleFrequencyGUI:
         # 右侧框架 - 运行日志
         right_frame = tk.Frame(main_frame)
         right_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
+        
+        # 统计数据显示面板
+        stats_frame = tk.LabelFrame(right_frame, text='统计数据', padx=6, pady=6)
+        stats_frame.pack(fill=tk.X, pady=4)
+        
+        # 创建统计标签
+        self.stats_labels = {}
+        stats_items = [
+            ('电流循环次数', 'current_cycle_count'),
+            ('温度循环次数', 'temperature_cycle_count'),
+            ('频率循环次数', 'sweep_count'),
+            ('出峰次数', 'peak_count')
+        ]
+        
+        for i, (label_text, var_name) in enumerate(stats_items):
+            # 创建标签
+            label = tk.Label(stats_frame, text=f"{label_text}: ")
+            label.grid(row=i, column=0, sticky='w', padx=4, pady=2)
+            
+            # 创建值显示标签
+            value_label = tk.Label(stats_frame, text="0", font=("Arial", 10, "bold"))
+            value_label.grid(row=i, column=1, sticky='w', padx=4, pady=2)
+            
+            # 保存标签引用
+            self.stats_labels[var_name] = value_label
         
         # 测试类型选择区（居中+外框）- 放在左侧
         type_labelframe = tk.LabelFrame(left_frame, text='测试项选择', padx=10, pady=10)
@@ -692,7 +729,14 @@ class SingleFrequencyGUI:
     def log(self, msg):
         t = time.strftime('[%H:%M:%S]')
         self.root.after(0, lambda: self._safe_log_append(f"{t} {msg}\n"))
-
+    
+    def update_stats(self):
+        """更新统计数据显示"""
+        for var_name, label in self.stats_labels.items():
+            if hasattr(self, var_name):
+                value = getattr(self, var_name)
+                self.root.after(0, lambda l=label, v=value: l.config(text=str(v)))
+    
     def _save_params(self):
         for k, e in self.entries.items():
             v = e.get()
@@ -834,6 +878,27 @@ class SingleFrequencyGUI:
         p = self.params_1um if self.test_type_var.get() == "1μm" else self.params_1_5um
         out_dir = os.path.abspath(str(p['输出目录']))
         os.makedirs(out_dir, exist_ok=True)
+        
+        # 清空输出文件夹
+        if os.path.exists(out_dir):
+            self.log(f"[测试] 正在清空输出文件夹: {out_dir}")
+            for item in os.listdir(out_dir):
+                item_path = os.path.join(out_dir, item)
+                if os.path.isfile(item_path):
+                    os.remove(item_path)
+                elif os.path.isdir(item_path):
+                    import shutil
+                    shutil.rmtree(item_path)
+            self.log(f"[测试] 输出文件夹清空完成")
+
+        # 获取测试时长参数
+        test_duration_min = float(p.get('测试时长(分钟)', 30.0))
+        test_duration_sec = test_duration_min * 60
+        start_time = time.time()
+        end_time = start_time + test_duration_sec
+        self.log(f"[测试] 开始时间: {time.strftime('%H:%M:%S', time.localtime(start_time))}")
+        self.log(f"[测试] 预计结束时间: {time.strftime('%H:%M:%S', time.localtime(end_time))}")
+        self.log(f"[测试] 测试时长: {test_duration_min:.1f} 分钟")
 
         sa = SingleFrequency(ip=str(p['IP地址']), timeout_s=60.0, log=self.log)
 
@@ -911,6 +976,10 @@ class SingleFrequencyGUI:
                 last_temp_update = time.time()
                 last_cur_update = time.time()
                 
+                # 初始化电流和温度方向跟踪变量
+                prev_temp_increasing = True
+                prev_cur_increasing = True
+                
                 while not self.stop_flag.is_set():
                     try:
                         current_time = time.time()
@@ -936,6 +1005,15 @@ class SingleFrequencyGUI:
                                 
                                 # 获取当前温度值用于日志和设置
                                 current_temp = shared_data['temp']
+                                
+                                # 检测温度循环（方向变化）
+                                if shared_data['temp_increasing'] != prev_temp_increasing:
+                                    # 如果从递减变为递增，说明完成了一个完整的温度循环
+                                    if shared_data['temp_increasing']:
+                                        self.temperature_cycle_count += 1
+                                        self.log(f"[统计] 温度循环次数: {self.temperature_cycle_count}")
+                                        self.update_stats()
+                                    prev_temp_increasing = shared_data['temp_increasing']
                             
                             # 设置新温度
                             self.log(f"[上位机] 设置温度: {current_temp:.2f} °C")
@@ -958,6 +1036,15 @@ class SingleFrequencyGUI:
                                 
                                 # 获取当前电流值用于日志和设置
                                 current_cur = shared_data['cur']
+                                
+                                # 检测电流循环（方向变化）
+                                if shared_data['cur_increasing'] != prev_cur_increasing:
+                                    # 如果从递减变为递增，说明完成了一个完整的电流循环
+                                    if shared_data['cur_increasing']:
+                                        self.current_cycle_count += 1
+                                        self.log(f"[统计] 电流循环次数: {self.current_cycle_count}")
+                                        self.update_stats()
+                                    prev_cur_increasing = shared_data['cur_increasing']
                             
                             # 设置新电流
                             self.log(f"[上位机] 设置电流: {current_cur:.2f} mA")
@@ -977,6 +1064,13 @@ class SingleFrequencyGUI:
             
             # 主循环：持续进行细扫，从共享变量获取温度和电流值
             while not self.stop_flag.is_set():
+                # 检查测试时长是否已到
+                current_time = time.time()
+                if current_time >= end_time:
+                    self.log(f"[测试] 测试时长已到，结束测试")
+                    self.stop_flag.set()
+                    break
+                
                 # 检查暂停状态
                 if self.pause_flag.is_set():
                     self._pause_point()
@@ -1013,7 +1107,13 @@ class SingleFrequencyGUI:
                         rbw_used = sa.last_rbw_hz if getattr(sa, 'last_rbw_hz', None) else 30.0 * 1e3
                         csvp, pngp, peakcsv = fine_peak.save_csv_png(x, y, peaks, out_dir, tag2, rbw_hz=rbw_used)
                         self.log(f"[细扫] 命中异常峰，保存：{tag2}.csv/.png/_peaks.csv")
-                        self.root.after(0, lambda p=pngp, t=actual_temp, i=actual_cur, c=center: self.show_image_popup(p, title=f"细扫异常：{c/1e9:.3f} GHz, T={t:.3f}°C, I={i:.1f}mA"))
+                        # 不再弹出截图窗口，仅保存数据
+                        # self.root.after(0, lambda p=pngp, t=actual_temp, i=actual_cur, c=center: self.show_image_popup(p, title=f"细扫异常：{c/1e9:.3f} GHz, T={t:.3f}°C, I={i:.1f}mA"))
+                        
+                        # 出峰次数统计
+                        self.peak_count += 1
+                        self.log(f"[统计] 出峰次数: {self.peak_count}")
+                        self.update_stats()
                         break
                 
                 # 更新细扫中心频率
@@ -1021,6 +1121,9 @@ class SingleFrequencyGUI:
                 if center - span / 2.0 >= f_stop:
                     # 细扫完成一轮，重新开始
                     center = f_start + span / 2.0
+                    self.sweep_count += 1
+                    self.log(f"[统计] 频率循环次数: {self.sweep_count}")
+                    self.update_stats()
             
             self.log("— 全部流程结束 —")
 
