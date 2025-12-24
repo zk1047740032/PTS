@@ -181,25 +181,28 @@ class SpectrumAnalyzerController:
     # --------------------- #
     # 线宽测量逻辑（简化版）
     # --------------------- #
-    def measure_linewidth_kHz(self):
+    def measure_linewidth_kHz(self, center_MHz=80.0):
         """
         使用 Rohde & Schwarz FSV3004 测量线宽 (20 dB 带宽)
         - 优先使用硬件的 n dB down marker 功能 (CALC:MARK1:FUNC:NDBDown)
         - 若仪器不支持或超时，则自动回退到软件计算 (基于 TRACE 数据)
         返回值: 线宽 (kHz)
+        
+        参数:
+        - center_MHz: 中心频率 (MHz)，默认值 80.0
         """
         if self.inst is None:
             raise RuntimeError("频谱仪未连接。")
 
         try:
-            self.log("[FSV] 开始测量线宽: 80MHz, span=1MHz, RBW=100Hz")
+            self.log(f"[FSV] 开始测量线宽: {center_MHz}MHz, span=1MHz, RBW=100Hz")
             #self.inst.clear()
             self.inst.timeout = 20000
             self.inst.write("*CLS")
             self.inst.write("INIT:CONT OFF")
 
             # 基本扫描设置
-            self.inst.write("FREQ:CENT 80MHz")
+            self.inst.write(f"FREQ:CENT {center_MHz}MHz")
             self.inst.write("FREQ:SPAN 1MHz")
             self.inst.write("BAND 100Hz")
             self.inst.write("SWE:POIN 2001")
@@ -236,7 +239,7 @@ class SpectrumAnalyzerController:
         except (pyvisa.errors.VisaIOError, RuntimeError) as e:
             self.log(f"[FSV][警告] 硬件线宽读取失败: {e}")
             self.log("[FSV] 自动切换到软件线宽测量模式...")
-            return self.measure_linewidth_from_trace()
+            return self.measure_linewidth_from_trace(center_MHz)
 
         except Exception as e:
             self.log(f"[FSV][错误] 线宽测量失败: {e}")
@@ -245,12 +248,16 @@ class SpectrumAnalyzerController:
             return float("nan")
 
 
-    def measure_linewidth_from_trace(self):
-        """软件计算线宽 (3 dB 带宽)，当仪器不支持 FUNC:RES? 时使用"""
+    def measure_linewidth_from_trace(self, center_MHz=80.0):
+        """软件计算线宽 (3 dB 带宽)，当仪器不支持 FUNC:RES? 时使用
+        
+        参数:
+        - center_MHz: 中心频率 (MHz)，默认值 80.0
+        """
         if self.inst is None:
             raise RuntimeError("频谱仪未连接。")
         try:
-            self.log("[FSV] 启动软件线宽测量 (基于 Trace 数据)")
+            self.log(f"[FSV] 启动软件线宽测量 (基于 Trace 数据): {center_MHz}MHz")
 
             # 清空命令缓冲区（部分LAN接口不支持clear）
             try:
@@ -263,7 +270,7 @@ class SpectrumAnalyzerController:
             self.inst.write("INIT:CONT OFF")
             self.inst.write("SWE:POIN 2001")
             self.inst.write("DISP:WIND:TRAC:Y:RLEV 0dBm")
-            self.inst.write("FREQ:CENT 80MHz")
+            self.inst.write(f"FREQ:CENT {center_MHz}MHz")
             self.inst.write("FREQ:SPAN 1MHz")
             self.inst.write("BAND 100Hz")
 
@@ -614,7 +621,7 @@ class TestRunner:
         return fig_path
 
     def run_group1(self, start_temp: float, end_temp: float, step: float, save_path: str = "./data",
-                   delay_s: float = 0.8, summary_filename: str = None, current_mA: float = None):
+                   delay_s: float = 0.8, summary_filename: str = None, current_mA: float = None, center_MHz: float = 80.0):
         self._stop = False
         try:
             if os.path.isdir(save_path) or save_path.endswith(os.sep):
@@ -769,7 +776,7 @@ class TestRunner:
                     time.sleep(delay_s)
 
                 try:
-                    linewidth_khz = self.sa.measure_linewidth_kHz()
+                    linewidth_khz = self.sa.measure_linewidth_kHz(center_MHz)
                 except Exception as e:
                     self.log(f"[Runner] 组1 SA 读取失败 (temp {t}°C): {e}")
                     continue
@@ -887,7 +894,7 @@ class TestRunner:
             return None
 
     def run_group2(self, start_mA: float, step_mA: float, stop_mA: float, temp_C: float,
-                   save_path: str = "./data", delay_s: float = 0.6, summary_filename: str = None):
+                   save_path: str = "./data", delay_s: float = 0.8, summary_filename: str = None, center_MHz: float = 80.0):
         self._stop = False
         try:
             if os.path.isdir(save_path) or save_path.endswith(os.sep):
@@ -995,7 +1002,7 @@ class TestRunner:
                 time.sleep(delay_s * 0.5)
 
                 try:
-                    linewidth_khz = self.sa.measure_linewidth_kHz()
+                    linewidth_khz = self.sa.measure_linewidth_kHz(center_MHz)
                 except Exception as e:
                     self.log(f"[Runner] 组2 SA 读取失败 (current {cur} mA): {e}")
                     continue
@@ -1038,7 +1045,7 @@ class CT_L_GUI:
             self.root.title("CT_L - 独立模式")
             # 假设 set_center() 只有在独立模式下需要
             if hasattr(self, 'set_center'):
-                self.set_center(1510, 1180) 
+                self.set_center(1510, 1270) 
             self.root.resizable(True, True)
             try:
                 self.root.iconbitmap(r'PreciLasers.ico')
@@ -1048,7 +1055,7 @@ class CT_L_GUI:
             self.root = parent # <--- 修改点：直接使用父 Frame
 
         self.params = {
-            "osa_ip": "192.168.29.11",
+            "osa_ip": "192.168.7.20",
             "current_mA": 360.0,
             "t_start": 36.0,
             "t_stop": 15.0,
@@ -1067,6 +1074,8 @@ class CT_L_GUI:
             "group2_summary_filename": "Test2_summary",
             "fine_center_C": 25.0,
             "fine_range_C": 1.0,
+            "group1_center_MHz": 180.0,
+            "group2_center_MHz": 180.0,
         }
         self.param_labels = {
             "laser_exe_path": "软件路径",
@@ -1140,17 +1149,18 @@ class CT_L_GUI:
         group1_frame = tk.LabelFrame(param_frame, text="第一组测试", padx=6, pady=6)
         group1_frame.pack(fill="x", padx=6, pady=4)
 
-        self._add_param_entry(group1_frame, "t_start", "初始温度:", self.params.get("t_start", 20.0), row=0)
-        self._add_param_entry(group1_frame, "t_stop", "终止温度:", self.params.get("t_stop", 40.0), row=1)
-        self._add_param_entry(group1_frame, "t_step", "步进温度:", self.params.get("t_step", 0.5), row=2)
-        self._add_param_entry(group1_frame, "fine_center_C", "精测中心:", self.params.get("fine_center_C", 25.0), row=3)
-        self._add_param_entry(group1_frame, "fine_range_C", "精测范围:", self.params.get("fine_range_C", 1.0), row=4)
+        self._add_param_entry(group1_frame, "group1_center_MHz", "中心频率(MHz):", self.params.get("group1_center_MHz", 180.0), row=0)
+        self._add_param_entry(group1_frame, "t_start", "初始温度:", self.params.get("t_start", 20.0), row=1)
+        self._add_param_entry(group1_frame, "t_stop", "终止温度:", self.params.get("t_stop", 40.0), row=2)
+        self._add_param_entry(group1_frame, "t_step", "步进温度:", self.params.get("t_step", 0.5), row=3)
+        self._add_param_entry(group1_frame, "fine_center_C", "精测中心:", self.params.get("fine_center_C", 25.0), row=4)
+        self._add_param_entry(group1_frame, "fine_range_C", "精测范围:", self.params.get("fine_range_C", 1.0), row=5)
 
-        self._add_param_entry(group1_frame, "current_mA", "固定电流:", self.params.get("current_mA", 360.0), row=5)
-        self._add_param_entry(group1_frame, "group1_delay_s", "稳定时间:", self.params.get("group1_delay_s", 5), row=6)
-        self._add_param_entry(group1_frame, "group1_summary_filename", "保存文件名", self.params.get("group1_summary_filename", "Test1_summary.csv"), row=7)
+        self._add_param_entry(group1_frame, "current_mA", "固定电流:", self.params.get("current_mA", 360.0), row=6)
+        self._add_param_entry(group1_frame, "group1_delay_s", "稳定时间:", self.params.get("group1_delay_s", 5), row=7)
+        self._add_param_entry(group1_frame, "group1_summary_filename", "保存文件名", self.params.get("group1_summary_filename", "Test1_summary.csv"), row=8)
         group1_buttons = tk.Frame(group1_frame)
-        group1_buttons.grid(row=8, column=0, columnspan=3, pady=4)
+        group1_buttons.grid(row=9, column=0, columnspan=3, pady=4)
         self.btn_group1_start = tk.Button(
             group1_buttons, text="开始测试", command=self.start_group1, 
             bg="#4CAF50", fg="#FFFFFF", width=12
@@ -1165,14 +1175,15 @@ class CT_L_GUI:
         group2_frame = tk.LabelFrame(param_frame, text="第二组测试", padx=6, pady=6)
         group2_frame.pack(fill="x", padx=6, pady=4)
     
-        self._add_param_entry(group2_frame, "group2_start_mA", "初始电流:", self.params.get("group2_start_mA", 400.0), row=0)
-        self._add_param_entry(group2_frame, "group2_stop_mA", "终止电流:", self.params.get("group2_stop_mA", 0.5), row=1)
-        self._add_param_entry(group2_frame, "group2_step_mA", "步进电流:", self.params.get("group2_step_mA", 5.0), row=2)
-        self._add_param_entry(group2_frame, "group2_temp_C", "测试温度:", self.params.get("group2_temp_C", 25.0), row=3)
-        self._add_param_entry(group2_frame, "group2_delay_s", "稳定时间:", self.params.get("group2_delay_s", 2), row=4)
-        self._add_param_entry(group2_frame, "group2_summary_filename", "保存文件名:", self.params.get("group2_summary_filename", "Test2_summary.csv"), row=5)
+        self._add_param_entry(group2_frame, "group2_center_MHz", "中心频率(MHz):", self.params.get("group2_center_MHz", 180.0), row=0)
+        self._add_param_entry(group2_frame, "group2_start_mA", "初始电流:", self.params.get("group2_start_mA", 400.0), row=1)
+        self._add_param_entry(group2_frame, "group2_stop_mA", "终止电流:", self.params.get("group2_stop_mA", 0.5), row=2)
+        self._add_param_entry(group2_frame, "group2_step_mA", "步进电流:", self.params.get("group2_step_mA", 5.0), row=3)
+        self._add_param_entry(group2_frame, "group2_temp_C", "测试温度:", self.params.get("group2_temp_C", 25.0), row=4)
+        self._add_param_entry(group2_frame, "group2_delay_s", "稳定时间:", self.params.get("group2_delay_s", 2), row=5)
+        self._add_param_entry(group2_frame, "group2_summary_filename", "保存文件名:", self.params.get("group2_summary_filename", "Test2_summary.csv"), row=6)
         group2_buttons = tk.Frame(group2_frame)
-        group2_buttons.grid(row=6, column=0, columnspan=3, pady=4)
+        group2_buttons.grid(row=7, column=0, columnspan=3, pady=4)
         self.btn_group2_start = tk.Button(
             group2_buttons, text="开始测试", command=self.start_group2, 
             bg="#4CAF50", fg="#FFFFFF", width=12
@@ -1368,7 +1379,8 @@ class CT_L_GUI:
                         save_path=p["save_path"],
                         delay_s=p["group1_delay_s"],
                         summary_filename=p["group1_summary_filename"],
-                        current_mA=p["current_mA"]
+                        current_mA=p["current_mA"],
+                        center_MHz=p["group1_center_MHz"]
                     )
                     img_path = self.runner.plot_group1_linewidth_vs_temperature(
                         p["save_path"], 
@@ -1479,7 +1491,8 @@ class CT_L_GUI:
                         temp_C=p["group2_temp_C"],
                         save_path=p["save_path"],
                         delay_s=p["group2_delay_s"],
-                        summary_filename=p["group2_summary_filename"]
+                        summary_filename=p["group2_summary_filename"],
+                        center_MHz=p["group2_center_MHz"]
                     )
                     import glob
                     pattern = os.path.join(p["save_path"], "电流线宽关系图_*.png")
@@ -1580,3 +1593,4 @@ class CT_L_GUI:
 if __name__ == "__main__":
     gui = CT_L_GUI()
     gui.run()
+# pyinstaller -F -w "d:\Coding\Project\PreciTestSystem\PTS\qijian\CT_L.py"

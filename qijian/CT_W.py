@@ -947,7 +947,7 @@ class CT_W_GUI:
 
         # defaults (added group2 params)
         self.params = {
-            "osa_ip": "192.168.29.11",
+            "osa_ip": "192.168.7.21",
             "current_mA": 360.0,
             "t_start": 36.0,
             "t_stop": 15.0,
