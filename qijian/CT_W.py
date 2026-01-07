@@ -518,6 +518,130 @@ class TestRunner:
 
         return float(wl_peak)
 
+    def _ensure_process_data_dir(self, save_path: str, test_group: int) -> str:
+        """
+        确保测试数据文件夹存在
+        根据测试组号返回不同的文件夹路径
+        - 组1: 过程数据1
+        - 组2: 过程数据2
+        """
+        if os.path.isdir(save_path) or save_path.endswith(os.sep):
+            out_dir = save_path
+        else:
+            out_dir = os.path.dirname(save_path) or "."
+        
+        # 根据测试组号选择文件夹名称
+        if test_group == 1:
+            process_data_dir = os.path.join(out_dir, "过程数据1")
+        else:
+            process_data_dir = os.path.join(out_dir, "过程数据2")
+        
+        ensure_dir(process_data_dir)
+        return process_data_dir
+
+    def _save_screenshot(self, save_path: str, step_value: float, test_group: int) -> Optional[str]:
+        """
+        保存当前截图到测试数据文件夹
+        - 组1: 保存到"过程数据1"文件夹
+        - 组2: 保存到"过程数据2"文件夹
+        step_value: 当前步进值（温度或电流）
+        test_group: 测试组号（1或2）
+        """
+        try:
+            if self.osa.inst is None:
+                self.log("[Runner] OSA 未连接，无法保存截图")
+                return None
+
+            # 确保测试数据文件夹存在
+            process_data_dir = self._ensure_process_data_dir(save_path, test_group)
+            
+            # 生成唯一文件名
+            #timestamp = time.strftime("%Y%m%d_%H%M%S")
+            if test_group == 1:
+                filename = f"测试1_Temp_{step_value:.2f}C.bmp"
+            else:
+                filename = f"测试2_Curr_{step_value:.2f}mA.bmp"
+            save_filename = os.path.join(process_data_dir, filename)
+
+            # 设置长超时时间
+            orig_timeout = self.osa.inst.timeout
+            self.osa.inst.timeout = 180000  # 180秒
+            
+            try:
+                # 1. 在仪器内部保存截图
+                self.osa.inst.write(':MMEMory:STORe:GRAPhics COLor,BMP,"screenshot",INT')
+                # 等待操作完成
+                self.osa.inst.query("*OPC?")
+                
+                # 2. 从仪器读取截图数据
+                raw_data = self.osa.inst.query_binary_values(':MMEMory:DATA? "screenshot.bmp",INT', 
+                                                             datatype='B', container=bytes)
+                
+                # 3. 保存到PC文件
+                with open(save_filename, "wb") as f:
+                    f.write(raw_data)
+                
+                self.log(f"[Runner] 截图已保存到: {save_filename}")
+                return save_filename
+            finally:
+                # 恢复原始超时设置
+                self.osa.inst.timeout = orig_timeout
+        except Exception as e:
+            self.log(f"[Runner] 保存截图失败: {e}")
+            return None
+
+    def _save_all_curves(self, save_path: str, step_value: float, test_group: int) -> Optional[str]:
+        """
+        保存所有曲线数据到测试数据文件夹
+        - 组1: 保存到"过程数据1"文件夹
+        - 组2: 保存到"过程数据2"文件夹
+        使用:MMEMory:STORe:ATRace命令保存所有曲线
+        step_value: 当前步进值（温度或电流）
+        test_group: 测试组号（1或2）
+        """
+        try:
+            if self.osa.inst is None:
+                self.log("[Runner] OSA 未连接，无法保存曲线")
+                return None
+
+            # 确保测试数据文件夹存在
+            process_data_dir = self._ensure_process_data_dir(save_path, test_group)
+            
+            # 生成唯一文件名
+            #timestamp = time.strftime("%Y%m%d_%H%M%S")
+            if test_group == 1:
+                curve_filename = f"测试1_Temp_{step_value:.2f}C"
+            else:
+                curve_filename = f"测试2_Curr_{step_value:.2f}mA"
+            
+            # 设置长超时时间
+            orig_timeout = self.osa.inst.timeout
+            self.osa.inst.timeout = 60000  # 60秒
+            
+            try:
+                # 1. 保存所有曲线数据到仪器内部
+                self.osa.inst.write(f':MMEMory:STORe:ATRace "{curve_filename}",INT')
+                # 等待操作完成
+                self.osa.inst.query("*OPC?")
+                
+                # 2. 同时保存当前轨迹的CSV数据作为备份
+                wl, power = self.osa.fetch_trace()
+                csv_filename = os.path.join(process_data_dir, f"{curve_filename}.csv")
+                with open(csv_filename, "w", newline="", encoding="utf-8") as f:
+                    w = csv.writer(f)
+                    w.writerow(["Wavelength_nm", "Power"])
+                    for x, y in zip(wl, power):
+                        w.writerow([f"{float(x):.4f}", f"{float(y):.6f}"])
+                
+                self.log(f"[Runner] 曲线数据已保存到: {csv_filename}")
+                return csv_filename
+            finally:
+                # 恢复原始超时设置
+                self.osa.inst.timeout = orig_timeout
+        except Exception as e:
+            self.log(f"[Runner] 保存曲线失败: {e}")
+            return None
+
     
     def _plot_xy_curve(self, x, y, xlabel, ylabel, title, out_dir, prefix, invert_x=False, save_csv=False, extra_cols=None):
         """
@@ -689,6 +813,11 @@ class TestRunner:
                     self.log(f"[Runner] 组1 OSA 读取失败 (temp {t}°C): {e}")
                     continue
                 main_wl = self._compute_peak_wavelength(wavelengths, powers)
+                
+                # 保存截图和曲线数据到"过程数据"文件夹
+                self._save_screenshot(save_path, t, 1)
+                self._save_all_curves(save_path, t, 1)
+                
                 try:
                     self._append_summary(save_path, current_for_temp, t, main_wl, "", test_group=1, summary_filename=summary_filename)
                     self.log(f"[Runner] 组1 {current_for_temp}mA, {t:.2f}°C -> 主波长 {main_wl:.4f} nm")
@@ -897,6 +1026,11 @@ class TestRunner:
                     continue
 
                 main_wl = self._compute_peak_wavelength(wavelengths, powers)
+                
+                # 保存截图和曲线数据到"过程数据"文件夹
+                self._save_screenshot(save_path, cur, 2)
+                self._save_all_curves(save_path, cur, 2)
+                
                 try:
                     self._append_summary(save_path, cur, temp_C, main_wl, "",
                                         test_group=2, summary_filename=summary_filename)
@@ -933,7 +1067,7 @@ class CT_W_GUI:
         # --- 核心修改：如果是集成模式，直接使用父控件作为 root ---
         if parent is None:
             self.root = tk.Tk()
-            self.root.title("CT_P - 独立模式")
+            self.root.title("CT_W - 独立模式")
             # 假设 set_center() 只有在独立模式下需要
             if hasattr(self, 'set_center'):
                 self.set_center(1510, 1090) 
@@ -954,7 +1088,7 @@ class CT_W_GUI:
             "t_step": 1.0,
             "center_nm": 1550.0,
             "span_nm": 5.0,
-            "laser_exe_path": r"C:\PTS\qijian\上位机软件\CT_W\Preci_Semi\Preci-Seed.exe",
+            "laser_exe_path": r"C:\PTS\qijian\上位机软件\Preci_Semi\Preci-Seed.exe",
             "save_path": r"C:\PTS\qijian\CT_W",
             # group2 specific
             "group2_temp_C": 25.0,           # 新增：第二组测试前设置的温度

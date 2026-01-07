@@ -342,7 +342,7 @@ class TimeDomainGUI:
                 # 保存截图，文件名包含频率信息
                 screenshot = td.save_screenshot(filename=f"scope_screenshot_{freq}Hz.png")
                 # 显示截图
-                self.show_image_popup(screenshot)
+                #self.show_image_popup(screenshot)
             
             # 恢复原始频率参数
             self.params["GEN_FREQ"] = original_freq

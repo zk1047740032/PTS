@@ -106,12 +106,14 @@ class RinAnalyzer:
         if not self.instrument:
             self.log("未连接到仪器")
             return
-        self.instrument.write(":INST:SEL SA") # 选择频谱分析仪
-        self.instrument.write(":CONF:SAN") # 配置频谱分析仪
+        self.instrument.write(":INST:SEL SAN") # 切换为频谱分析模式
+        #self.instrument.write(":CONF:SAN") # 配置频谱分析仪
         self.instrument.write("SWE:POIN 2001") # 设置采样点数
-        self.instrument.write("UNIT:POW V") # 设置单位为伏特
-        self.instrument.write("TRACE1:TYPE AVERage") # 设置追踪类型为平均
-        self.log("仪器已配置（SWE:POIN 2001, UNIT: V, TRACE: AVERage）")
+        self.instrument.write("DISPlay:TRACe1:MODE Average") # Trace -> Trace1 -> Mode: Average
+        self.instrument.write("DETector1:FUNCtion RMS") # Trace -> Trace1 -> Detector Type: RMS
+        self.instrument.write("INPut:COUPling DC") # Amplitude -> Input Coupling: DC
+        self.instrument.write("CALCulate:UNIT:POWer V") # Amplitude -> Reference Level -> Unit: V
+        self.log("仪器已配置（扫描点数：2001, 单位: V, 追踪模式: AVERage）")
 
     # 测量函数（与原样）
     def measure_segment(self, start_freq, stop_freq, bandwidth, avg_count, filename):
