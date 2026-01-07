@@ -592,12 +592,7 @@ class TestRunner:
 
     def _save_all_curves(self, save_path: str, step_value: float, test_group: int) -> Optional[str]:
         """
-        保存所有曲线数据到测试数据文件夹
-        - 组1: 保存到"过程数据1"文件夹
-        - 组2: 保存到"过程数据2"文件夹
-        使用:MMEMory:STORe:ATRace命令保存所有曲线
-        step_value: 当前步进值（温度或电流）
-        test_group: 测试组号（1或2）
+        修改后：保存仪器生成的所有曲线文件(.csv)到电脑
         """
         try:
             if self.osa.inst is None:
@@ -607,36 +602,52 @@ class TestRunner:
             # 确保测试数据文件夹存在
             process_data_dir = self._ensure_process_data_dir(save_path, test_group)
             
-            # 生成唯一文件名
-            #timestamp = time.strftime("%Y%m%d_%H%M%S")
+            # 生成本地文件名
             if test_group == 1:
-                curve_filename = f"测试1_Temp_{step_value:.2f}C"
+                curve_filename = f"测试1_Temp_{step_value:.2f}C_AllTraces.csv"
+                # 仪器内部文件名 (英文，无特殊字符)
+                instr_filename_base = f"Test1_T_{step_value:.2f}C"
             else:
-                curve_filename = f"测试2_Curr_{step_value:.2f}mA"
+                curve_filename = f"测试2_Curr_{step_value:.2f}mA_AllTraces.csv"
+                instr_filename_base = f"Test2_I_{step_value:.2f}mA"
             
+            # 仪器内完整文件名 (ATRace指令通常会自动添加.CSV后缀，但读取时最好明确)
+            # 注意：不同型号OSA生成的后缀可能是.CSV，读取时需匹配
+            instr_full_filename = f"{instr_filename_base}.CSV"
+
             # 设置长超时时间
             orig_timeout = self.osa.inst.timeout
             self.osa.inst.timeout = 60000  # 60秒
             
             try:
-                # 1. 保存所有曲线数据到仪器内部
-                self.osa.inst.write(f':MMEMory:STORe:ATRace "{curve_filename}",INT')
-                # 等待操作完成
-                self.osa.inst.query("*OPC?")
+                # 1. 让仪器保存所有曲线数据到内部存储器
+                # 注意：ATRace 指令会自动保存所有激活的 Trace (A-G)
+                self.osa.inst.write(f':MMEMory:STORe:ATRace "{instr_filename_base}",INT')
+                self.osa.inst.query("*OPC?")  # 等待保存完成
                 
-                # 2. 同时保存当前轨迹的CSV数据作为备份
-                wl, power = self.osa.fetch_trace()
-                csv_filename = os.path.join(process_data_dir, f"{curve_filename}.csv")
-                with open(csv_filename, "w", newline="", encoding="utf-8") as f:
-                    w = csv.writer(f)
-                    w.writerow(["Wavelength_nm", "Power"])
-                    for x, y in zip(wl, power):
-                        w.writerow([f"{float(x):.4f}", f"{float(y):.6f}"])
+                # 2. 【新增步骤】从仪器把这个文件下载到电脑
+                # 使用与截图相同的 :MMEMory:DATA? 指令读取二进制数据
+                self.log(f"[Runner] 正在从仪器下载文件: {instr_full_filename} ...")
+                file_data = self.osa.inst.query_binary_values(f':MMEMory:DATA? "{instr_full_filename}",INT', datatype='B', container=bytes)
                 
-                self.log(f"[Runner] 曲线数据已保存到: {csv_filename}")
-                return csv_filename
+                # 3. 保存到电脑硬盘
+                local_file_path = os.path.join(process_data_dir, curve_filename)
+                with open(local_file_path, "wb") as f:
+                    f.write(file_data)
+                
+                self.log(f"[Runner] 所有曲线数据已成功下载到: {local_file_path}")
+                
+                # (可选) 为了清理仪器空间，下载后可以删除仪器内的文件
+                # self.osa.inst.write(f':MMEMory:DELete "{instr_full_filename}",INT')
+
+                return local_file_path
+
+            except Exception as e:
+                self.log(f"[Runner] 下载所有曲线文件失败: {e}")
+                # 如果下载失败，保留原来的备份逻辑作为保底（只存单根曲线）
+                # ... (此处可保留原有的 fetch_trace 代码作为备用) ...
+                return None
             finally:
-                # 恢复原始超时设置
                 self.osa.inst.timeout = orig_timeout
         except Exception as e:
             self.log(f"[Runner] 保存曲线失败: {e}")
