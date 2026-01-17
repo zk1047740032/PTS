@@ -232,9 +232,8 @@ class RinAnalyzer:
                             file_dy.append(y)
                         except ValueError:
                             continue
-            if len(file_dy) < 2001:
+            if len(file_dy) != 2001:
                 self.log(f"警告: 数据点数非2001，实际 {len(file_dy)}")
-                return false
             self.dx.append(file_dx)
             self.dy.append(file_dy)
             return True
@@ -270,7 +269,7 @@ class RinAnalyzer:
             # 尝试读取文件，若失败则重试几次（读取可能因文件正在被写入而瞬时失败）
             read_ok = False
             read_attempts = 0
-            max_read_attempts = 10
+            max_read_attempts = 3
             while read_attempts < max_read_attempts and not read_ok:
                 try:
                     if self.read_data_from_csv(file_path):
@@ -282,7 +281,7 @@ class RinAnalyzer:
                 except Exception as e:
                     self.log(f"读取异常（尝试{read_attempts+1}）: {file_path} -> {e}")
                 read_attempts += 1
-                time.sleep(1.0)
+                time.sleep(0.5)
 
             if not read_ok:
                 self.log(f"最终读取失败: {file_path}")
@@ -371,8 +370,7 @@ class RinAnalyzer:
         adjusted_power = [p * 100 for p in self.RIN_power]
 
         """图2: RMS积分曲线"""
-        plot_len = len(adjusted_power)
-        ax2.plot(self.ddx[::6][:plot_len], adjusted_power, color="#085cab", linewidth=2)
+        ax2.plot(self.ddx[::6], adjusted_power, color="#085cab", linewidth=2)
         ax2.set_xscale('log')
         ax2.margins(x=0)
        # y轴只显示最大值、最小值和中间值
