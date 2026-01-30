@@ -460,7 +460,7 @@ class TestRunner:
         self.log(f"[Runner] 保存光谱: {filename}")
         return filename
 
-    def _append_summary(self, save_path: str, current_mA: float, temperature: Optional[float], main_wl: float, spectrum_file: str, test_group: int = 0, summary_filename: str = None):
+    def _append_summary(self, save_path: str, current_mA: float, temperature: Optional[float], main_wl: float, spectrum_file: str, test_group: int = 0, summary_filename: str = None, loop_idx: int = 1):
         if os.path.isdir(save_path) or save_path.endswith(os.sep):
             out_dir = save_path
         else:
@@ -484,11 +484,11 @@ class TestRunner:
         with open(summary_fn, "a", newline="", encoding="utf-8") as f:
             w = csv.writer(f)
             if header_needed:
-                # 测试1和测试2的CSV都去掉Timestamp和SpectrumFile两列
-                w.writerow(["Current_mA", "Temperature_C", "MainWavelength_nm"])
+                # 测试1和测试2的CSV添加Loop列
+                w.writerow(["Loop", "Current_mA", "Temperature_C", "MainWavelength_nm"])
             temp_str = f"{temperature:.2f}" if temperature is not None else "N/A"
-            # 测试1和测试2的数据行都只保留3列（主波长保留 4 位）
-            w.writerow([f"{current_mA:.2f}", temp_str, f"{main_wl:.4f}"])
+            # 测试1和测试2的数据行添加Loop列（主波长保留 4 位）
+            w.writerow([loop_idx, f"{current_mA:.2f}", temp_str, f"{main_wl:.4f}"])
         
     def _compute_peak_wavelength(self, wavelengths: np.ndarray, powers: np.ndarray) -> float:
         """
@@ -539,13 +539,14 @@ class TestRunner:
         ensure_dir(process_data_dir)
         return process_data_dir
 
-    def _save_screenshot(self, save_path: str, step_value: float, test_group: int) -> Optional[str]:
+    def _save_screenshot(self, save_path: str, step_value: float, test_group: int, loop_idx: int = 1) -> Optional[str]:
         """
         保存当前截图到测试数据文件夹
         - 组1: 保存到"过程数据1"文件夹
         - 组2: 保存到"过程数据2"文件夹
         step_value: 当前步进值（温度或电流）
         test_group: 测试组号（1或2）
+        loop_idx: 循环序号（默认为1）
         """
         try:
             if self.osa.inst is None:
@@ -555,12 +556,12 @@ class TestRunner:
             # 确保测试数据文件夹存在
             process_data_dir = self._ensure_process_data_dir(save_path, test_group)
             
-            # 生成唯一文件名
+            # 生成唯一文件名，包含循环序号
             #timestamp = time.strftime("%Y%m%d_%H%M%S")
             if test_group == 1:
-                filename = f"测试1_Temp_{step_value:.2f}C.bmp"
+                filename = f"测试1_Temp_{step_value:.2f}C_Loop{loop_idx}.bmp"
             else:
-                filename = f"测试2_Curr_{step_value:.2f}mA.bmp"
+                filename = f"测试2_Curr_{step_value:.2f}mA_Loop{loop_idx}.bmp"
             save_filename = os.path.join(process_data_dir, filename)
 
             # 设置长超时时间
@@ -590,9 +591,12 @@ class TestRunner:
             self.log(f"[Runner] 保存截图失败: {e}")
             return None
 
-    def _save_all_curves(self, save_path: str, step_value: float, test_group: int) -> Optional[str]:
+    def _save_all_curves(self, save_path: str, step_value: float, test_group: int, loop_idx: int = 1) -> Optional[str]:
         """
         修改后：保存仪器生成的所有曲线文件(.csv)到电脑
+        step_value: 当前步进值（温度或电流）
+        test_group: 测试组号（1或2）
+        loop_idx: 循环序号（默认为1）
         """
         try:
             if self.osa.inst is None:
@@ -602,13 +606,13 @@ class TestRunner:
             # 确保测试数据文件夹存在
             process_data_dir = self._ensure_process_data_dir(save_path, test_group)
             
-            # 生成本地文件名
+            # 生成本地文件名，包含循环序号
             if test_group == 1:
-                curve_filename = f"测试1_Temp_{step_value:.2f}C_AllTraces.csv"
+                curve_filename = f"测试1_Temp_{step_value:.2f}C_AllTraces_Loop{loop_idx}.csv"
                 # 仪器内部文件名 (英文，无特殊字符)
                 instr_filename_base = f"Test1_T_{step_value:.2f}C"
             else:
-                curve_filename = f"测试2_Curr_{step_value:.2f}mA_AllTraces.csv"
+                curve_filename = f"测试2_Curr_{step_value:.2f}mA_AllTraces_Loop{loop_idx}.csv"
                 instr_filename_base = f"Test2_I_{step_value:.2f}mA"
             
             # 仪器内完整文件名 (ATRace指令通常会自动添加.CSV后缀，但读取时最好明确)
@@ -718,9 +722,10 @@ class TestRunner:
         self.log("[Runner] 注意：run_manual_two_groups方法已不连续执行两组测试")
         self.log("[Runner] 请使用单独的开始按钮控制每组测试")
 
-    def run_group1(self, start_temp: float, end_temp: float, step: float, save_path: str = "./data", delay_s: float = 0.8, summary_filename: str = None, current_mA: float = None):
+    def run_group1(self, start_temp: float, end_temp: float, step: float, save_path: str = "./data", delay_s: float = 0.8, summary_filename: str = None, current_mA: float = None, loop_count: int = 1):
         """
         Group1: temperature sweep at current = GUI current_mA
+        loop_count: 循环次数（默认为1）
         """
         self._stop = False
 
@@ -771,69 +776,95 @@ class TestRunner:
                     current_for_temp = val
             temps = self._float_range(start_temp, end_temp, step)
             self.log(f"[Runner] 组1: 电流 {current_for_temp} mA 温度扫描 {start_temp}->{end_temp} step {step} 共 {len(temps)} 步，稳定时间 {delay_s} 秒")
+            self.log(f"[Runner] 组1: 循环次数 {loop_count} 次")
+            
             # 添加温度稳定检测参数
             stability_threshold = 0.1  # 稳定阈值，摄氏度
             max_wait_time = delay_s * 5  # 最大等待时间
             check_interval = 0.5  # 检查间隔
             
-            for t in temps:
+            # 外层循环：循环次数
+            for loop_idx in range(1, loop_count + 1):
                 if self._stop:
                     self.log("[Runner] 收到停止信号，结束组1")
                     break
-                if self.laser:
-                    try:
-                        self.laser.set_temperature_C(t)
-                        # 新增：等待温度稳定
-                        self.log(f"[Runner] 设置温度为 {t}°C，等待稳定...")
-                        wait_time = 0
-                        stable = False
-                        
-                        # 先等待一段时间让温度开始变化
-                        time.sleep(delay_s * 0.5)
-                        
-                        # 循环检查温度是否稳定
-                        while wait_time < max_wait_time and not stable and not self._stop:
-                            current_temp = self.laser.get_temperature_C()
-                            if current_temp is not None:
-                                temp_diff = abs(current_temp - t)
-                                self.log(f"[Runner] 当前温度: {current_temp:.2f}°C, 目标: {t:.2f}°C, 差值: {temp_diff:.2f}°C")
-                                
-                                if temp_diff <= stability_threshold:
-                                    stable = True
-                                    self.log(f"[Runner] 温度已稳定在 {t}°C")
+                
+                self.log(f"[Runner] ===== 开始第 {loop_idx}/{loop_count} 次循环 =====")
+                
+                for t in temps:
+                    if self._stop:
+                        self.log("[Runner] 收到停止信号，结束组1")
+                        break
+                    if self.laser:
+                        try:
+                            self.laser.set_temperature_C(t)
+                            # 新增：等待温度稳定
+                            self.log(f"[Runner] 设置温度为 {t}°C，等待稳定...")
+                            wait_time = 0
+                            stable = False
+                            
+                            # 先等待一段时间让温度开始变化
+                            time.sleep(delay_s * 0.5)
+                            
+                            # 循环检查温度是否稳定
+                            while wait_time < max_wait_time and not stable and not self._stop:
+                                current_temp = self.laser.get_temperature_C()
+                                if current_temp is not None:
+                                    temp_diff = abs(current_temp - t)
+                                    self.log(f"[Runner] 当前温度: {current_temp:.2f}°C, 目标: {t:.2f}°C, 差值: {temp_diff:.2f}°C")
+                                    
+                                    if temp_diff <= stability_threshold:
+                                        stable = True
+                                        self.log(f"[Runner] 温度已稳定在 {t}°C")
+                                    else:
+                                        time.sleep(check_interval)
+                                        wait_time += check_interval
                                 else:
+                                    # 无法读取温度时，退化为简单延时
                                     time.sleep(check_interval)
                                     wait_time += check_interval
-                            else:
-                                # 无法读取温度时，退化为简单延时
-                                time.sleep(check_interval)
-                                wait_time += check_interval
-                        
-                        if not stable and not self._stop:
-                            self.log(f"[Runner] 温度在 {max_wait_time}s 内未完全稳定，继续测量")
-                    except Exception as e:
-                        self.log(f"[Runner] 设置温度失败: {e}")
-                        # 设置失败时也等待一段时间
+                            
+                            if not stable and not self._stop:
+                                self.log(f"[Runner] 温度在 {max_wait_time}s 内未完全稳定，继续测量")
+                        except Exception as e:
+                            self.log(f"[Runner] 设置温度失败: {e}")
+                            # 设置失败时也等待一段时间
+                            time.sleep(delay_s)
+                    else:
+                        # 未连接激光控制器时，使用简单延时
                         time.sleep(delay_s)
-                else:
-                    # 未连接激光控制器时，使用简单延时
-                    time.sleep(delay_s)
-                try:
-                    wavelengths, powers = self.osa.sweep_and_fetch()
-                except Exception as e:
-                    self.log(f"[Runner] 组1 OSA 读取失败 (temp {t}°C): {e}")
-                    continue
-                main_wl = self._compute_peak_wavelength(wavelengths, powers)
+                    try:
+                        wavelengths, powers = self.osa.sweep_and_fetch()
+                    except Exception as e:
+                        self.log(f"[Runner] 组1 OSA 读取失败 (temp {t}°C): {e}")
+                        continue
+                    main_wl = self._compute_peak_wavelength(wavelengths, powers)
+                    
+                    # 保存截图和曲线数据到"过程数据"文件夹，添加循环序号
+                    self._save_screenshot(save_path, t, 1, loop_idx)
+                    self._save_all_curves(save_path, t, 1, loop_idx)
+                    
+                    try:
+                        self._append_summary(save_path, current_for_temp, t, main_wl, "", test_group=1, summary_filename=summary_filename, loop_idx=loop_idx)
+                        self.log(f"[Runner] 组1 {current_for_temp}mA, {t:.2f}°C -> 主波长 {main_wl:.4f} nm")
+                    except Exception as e:
+                        self.log(f"[Runner] 组1 写入汇总失败: {e}")
                 
-                # 保存截图和曲线数据到"过程数据"文件夹
-                self._save_screenshot(save_path, t, 1)
-                self._save_all_curves(save_path, t, 1)
+                self.log(f"[Runner] ===== 第 {loop_idx} 次循环完成 =====")
                 
-                try:
-                    self._append_summary(save_path, current_for_temp, t, main_wl, "", test_group=1, summary_filename=summary_filename)
-                    self.log(f"[Runner] 组1 {current_for_temp}mA, {t:.2f}°C -> 主波长 {main_wl:.4f} nm")
-                except Exception as e:
-                    self.log(f"[Runner] 组1 写入汇总失败: {e}")
+                # 循环未完成时，返回初始温度准备下一次循环
+                if loop_idx < loop_count and not self._stop:
+                    self.log(f"[Runner] 第 {loop_idx} 次循环完成，返回初始温度 {start_temp}°C...")
+                    if self.laser:
+                        try:
+                            self.laser.set_temperature_C(start_temp)
+                            # 等待温度返回初始值
+                            time.sleep(delay_s)
+                        except Exception as e:
+                            self.log(f"[Runner] 返回初始温度失败: {e}")
+            
+            if not self._stop:
+                self.log(f"[Runner] ===== 所有 {loop_count} 次循环测试完成 =====")
         except Exception as e:
             self.log(f"[Runner] 组1 出错: {e}")
 
@@ -856,11 +887,12 @@ class TestRunner:
                 header = next(reader)
                 self.log(f"[Runner] 读取到文件头: {header}")
 
-                # 🚀 新格式：3列 [Current_mA, Temperature_C, MainWavelength_nm]
+                # 🚀 新格式：4列 [Loop, Current_mA, Temperature_C, MainWavelength_nm]
                 for row in reader:
                     try:
-                        temp = float(row[1])
-                        wl = float(row[2])
+                        loop = int(row[0]) if len(row) > 0 else 1
+                        temp = float(row[2]) if len(row) > 2 else 0.0
+                        wl = float(row[3]) if len(row) > 3 else 0.0
                         if wl > 200:   # 波长大于200nm才算有效
                             temps.append(temp)
                             wavelengths.append(wl)
@@ -893,10 +925,11 @@ class TestRunner:
 
     # 新增：单独运行第二组测试
     def run_group2(self, start_mA: float, step_mA: float, stop_mA: float, temp_C: float,
-               save_path: str = "./data", delay_s: float = 0.6, summary_filename: str = None):
+               save_path: str = "./data", delay_s: float = 0.6, summary_filename: str = None, loop_count: int = 1):
         """
         Group2: current sweep from start_mA down by step_mA to stop_mA,
                 with temperature fixed at temp_C
+        loop_count: 循环次数（默认为1）
         """
         self._stop = False
         
@@ -979,94 +1012,119 @@ class TestRunner:
             c -= step_mag
 
         self.log(f"[Runner] 组2: 电流从 {start_curr}mA 每次 -{step_mag}mA 到 {stop_curr}mA，共 {len(currents)} 步，稳定时间 {delay_s} 秒")
-
-        peaks_curr = []
-        peaks_wl = []
+        self.log(f"[Runner] 组2: 循环次数 {loop_count} 次")
 
         # 添加电流稳定检测相关参数
         stability_threshold = 1.0  # 电流稳定阈值，mA
         max_wait_time = delay_s * 3  # 最大等待时间
         check_interval = 0.3  # 检查间隔
 
-        for cur in currents:
+        # 外层循环：循环次数
+        for loop_idx in range(1, loop_count + 1):
             if self._stop:
                 self.log("[Runner] 收到停止信号，提前结束组2")
                 break
-            try:
-                if self.laser:
-                    try:
-                        self.laser.set_current_mA(cur)
-                        # 新增：等待电流稳定
-                        self.log(f"[Runner] 设置电流为 {cur}mA，等待稳定...")
-                        wait_time = 0
-                        stable = False
-                         
-                        # 循环检查电流是否稳定
-                        while wait_time < max_wait_time and not stable and not self._stop:
-                            current_current = self.laser.get_current_mA()
-                            if current_current is not None:
-                                curr_diff = abs(current_current - cur)
-                                self.log(f"[Runner] 当前电流: {current_current:.2f}mA, 目标: {cur:.2f}mA, 差值: {curr_diff:.2f}mA")
-                                 
-                                if curr_diff <= stability_threshold:
-                                    stable = True
-                                    self.log(f"[Runner] 电流已稳定在 {cur}mA")
+            
+            self.log(f"[Runner] ===== 开始第 {loop_idx}/{loop_count} 次循环 =====")
+            
+            peaks_curr = []
+            peaks_wl = []
+
+            for cur in currents:
+                if self._stop:
+                    self.log("[Runner] 收到停止信号，提前结束组2")
+                    break
+                try:
+                    if self.laser:
+                        try:
+                            self.laser.set_current_mA(cur)
+                            # 新增：等待电流稳定
+                            self.log(f"[Runner] 设置电流为 {cur}mA，等待稳定...")
+                            wait_time = 0
+                            stable = False
+                             
+                            # 循环检查电流是否稳定
+                            while wait_time < max_wait_time and not stable and not self._stop:
+                                current_current = self.laser.get_current_mA()
+                                if current_current is not None:
+                                    curr_diff = abs(current_current - cur)
+                                    self.log(f"[Runner] 当前电流: {current_current:.2f}mA, 目标: {cur:.2f}mA, 差值: {curr_diff:.2f}mA")
+                                     
+                                    if curr_diff <= stability_threshold:
+                                        stable = True
+                                        self.log(f"[Runner] 电流已稳定在 {cur}mA")
+                                    else:
+                                        time.sleep(check_interval)
+                                        wait_time += check_interval
                                 else:
+                                    # 无法读取电流时，退化为简单延时
                                     time.sleep(check_interval)
                                     wait_time += check_interval
-                            else:
-                                # 无法读取电流时，退化为简单延时
-                                time.sleep(check_interval)
-                                wait_time += check_interval
-                         
-                        if not stable and not self._stop:
-                            self.log(f"[Runner] 电流在 {max_wait_time}s 内未完全稳定，继续测量")
+                             
+                            if not stable and not self._stop:
+                                self.log(f"[Runner] 电流在 {max_wait_time}s 内未完全稳定，继续测量")
+                        except Exception as e:
+                            self.log(f"[Runner] 设置电流 {cur} mA 失败: {e}")
+                            time.sleep(delay_s)  # 设置失败时也等待一段时间
+                    else:
+                        self.log(f"[Runner] 未配置 LaserController，跳过设置电流 {cur} mA (仍会采集 OSA)")
+                        time.sleep(delay_s)  # 未配置时使用简单延时
+
+                    time.sleep(delay_s * 0.5)  # 额外小延时，确保系统稳定
+
+                    try:
+                        wavelengths, powers = self.osa.sweep_and_fetch()
                     except Exception as e:
-                        self.log(f"[Runner] 设置电流 {cur} mA 失败: {e}")
-                        time.sleep(delay_s)  # 设置失败时也等待一段时间
-                else:
-                    self.log(f"[Runner] 未配置 LaserController，跳过设置电流 {cur} mA (仍会采集 OSA)")
-                    time.sleep(delay_s)  # 未配置时使用简单延时
+                        self.log(f"[Runner] 组2 OSA 读取失败 (current {cur} mA): {e}")
+                        continue
 
-                time.sleep(delay_s * 0.5)  # 额外小延时，确保系统稳定
+                    main_wl = self._compute_peak_wavelength(wavelengths, powers)
+                    
+                    # 保存截图和曲线数据到"过程数据"文件夹，添加循环序号
+                    self._save_screenshot(save_path, cur, 2, loop_idx)
+                    self._save_all_curves(save_path, cur, 2, loop_idx)
+                    
+                    try:
+                        self._append_summary(save_path, cur, temp_C, main_wl, "",
+                                            test_group=2, summary_filename=summary_filename, loop_idx=loop_idx)
+                    except Exception as e:
+                        self.log(f"[Runner] 组2 写入汇总失败: {e}")
 
-                try:
-                    wavelengths, powers = self.osa.sweep_and_fetch()
+                    peaks_curr.append(cur)
+                    peaks_wl.append(main_wl)
+                    self.log(f"[Runner] 组2 {int(cur)}mA @ {temp_C:.2f}°C -> 主波长 {main_wl:.4f} nm")
+
                 except Exception as e:
-                    self.log(f"[Runner] 组2 OSA 读取失败 (current {cur} mA): {e}")
+                    self.log(f"[Runner] 组2 电流 {cur} mA 处理失败: {e}")
                     continue
 
-                main_wl = self._compute_peak_wavelength(wavelengths, powers)
-                
-                # 保存截图和曲线数据到"过程数据"文件夹
-                self._save_screenshot(save_path, cur, 2)
-                self._save_all_curves(save_path, cur, 2)
-                
-                try:
-                    self._append_summary(save_path, cur, temp_C, main_wl, "",
-                                        test_group=2, summary_filename=summary_filename)
-                except Exception as e:
-                    self.log(f"[Runner] 组2 写入汇总失败: {e}")
-
-                peaks_curr.append(cur)
-                peaks_wl.append(main_wl)
-                self.log(f"[Runner] 组2 {int(cur)}mA @ {temp_C:.2f}°C -> 主波长 {main_wl:.4f} nm")
-
-            except Exception as e:
-                self.log(f"[Runner] 组2 电流 {cur} mA 处理失败: {e}")
-                continue
-
-        if peaks_curr:
-            self._plot_xy_curve(
-                peaks_curr, peaks_wl,
-                xlabel="电流(mA)", ylabel="波长(nm)",
-                title=f"{temp_C:.2f}°C下电流-波长关系",
-                out_dir=save_path, prefix="电流波长关系图",
-                invert_x=False, save_csv=False,
-                extra_cols={"Temperature_C": [f"{temp_C:.2f}"] * len(peaks_curr)}
-            )
-        else:
-            self.log("[Runner] 组2 没有采集到峰值数据，跳过作图")
+            if peaks_curr:
+                self._plot_xy_curve(
+                    peaks_curr, peaks_wl,
+                    xlabel="电流(mA)", ylabel="波长(nm)",
+                    title=f"{temp_C:.2f}°C下电流-波长关系",
+                    out_dir=save_path, prefix="电流波长关系图",
+                    invert_x=False, save_csv=False,
+                    extra_cols={"Temperature_C": [f"{temp_C:.2f}"] * len(peaks_curr)}
+                )
+            else:
+                self.log("[Runner] 组2 没有采集到峰值数据，跳过作图")
+            
+            self.log(f"[Runner] ===== 第 {loop_idx} 次循环完成 =====")
+            
+            # 循环未完成时，返回初始电流准备下一次循环
+            if loop_idx < loop_count and not self._stop:
+                self.log(f"[Runner] 第 {loop_idx} 次循环完成，返回初始电流 {start_curr}mA...")
+                if self.laser:
+                    try:
+                        self.laser.set_current_mA(start_curr)
+                        # 等待电流返回初始值
+                        time.sleep(delay_s)
+                    except Exception as e:
+                        self.log(f"[Runner] 返回初始电流失败: {e}")
+        
+        if not self._stop:
+            self.log(f"[Runner] ===== 所有 {loop_count} 次循环测试完成 =====")
 
 # -------------------------
 # GUI (with new group2 params)
@@ -1081,7 +1139,7 @@ class CT_W_GUI:
             self.root.title("CT_W - 独立模式")
             # 假设 set_center() 只有在独立模式下需要
             if hasattr(self, 'set_center'):
-                self.set_center(1510, 1090) 
+                self.set_center(1510, 1260) 
             self.root.resizable(True, True)
             try:
                 self.root.iconbitmap(r'PreciLasers.ico')
@@ -1111,7 +1169,10 @@ class CT_W_GUI:
             "group2_delay_s": 2,            # 组2电流步进后的等待时间(秒)
             # 新增：文件名参数
             "group1_summary_filename": "Test1_summary",
-            "group2_summary_filename": "Test2_summary"
+            "group2_summary_filename": "Test2_summary",
+            # 新增：循环次数参数
+            "group1_loop_count": 1,         # 组1循环次数
+            "group2_loop_count": 1          # 组2循环次数
         }
         self.param_labels = {
             "laser_exe_path": "软件路径",
@@ -1133,7 +1194,10 @@ class CT_W_GUI:
             "group2_delay_s": "组2 电流稳定时间 (秒)",
             # 新增：文件名参数标签
             "group1_summary_filename": "组1文件名",
-            "group2_summary_filename": "组2文件名"
+            "group2_summary_filename": "组2文件名",
+            # 新增：循环次数参数标签
+            "group1_loop_count": "组1循环次数",
+            "group2_loop_count": "组2循环次数"
         }
 
         self.create_widgets()
@@ -1200,17 +1264,24 @@ class CT_W_GUI:
         group1_frame = tk.LabelFrame(param_frame, text="第一组测试", padx=6, pady=6)
         group1_frame.pack(fill="x", padx=6, pady=4)
 
-        self._add_param_entry(group1_frame, "t_start", "初始温度:", self.params.get("t_start", 20.0), row=0)
-        self._add_param_entry(group1_frame, "t_stop", "终止温度:", self.params.get("t_stop", 40.0), row=1)
-        self._add_param_entry(group1_frame, "t_step", "步进温度:", self.params.get("t_step", 0.5), row=2)
+        # 新增：组1循环进度状态标签
+        self.group1_loop_status = tk.Label(group1_frame, text="循环进度: 未开始", fg="blue")
+        self.group1_loop_status.grid(row=0, column=0, columnspan=3, pady=1)
+        # 新增：组1循环次数输入框
+        self._add_param_entry(group1_frame, "group1_loop_count", "循环次数:", self.params.get("group1_loop_count", 1), row=1)
+
+        self._add_param_entry(group1_frame, "t_start", "初始温度:", self.params.get("t_start", 20.0), row=2)
+        self._add_param_entry(group1_frame, "t_stop", "终止温度:", self.params.get("t_stop", 40.0), row=3)
+        self._add_param_entry(group1_frame, "t_step", "步进温度:", self.params.get("t_step", 0.5), row=4)
         self._add_param_entry(group1_frame, "current_mA", "固定电流:", self.params.get("current_mA", 360.0), row=5)
         # 新增：组1时延参数输入框
         self._add_param_entry(group1_frame, "group1_delay_s", "稳定时间:", self.params.get("group1_delay_s", 5), row=6)
         # 新增：组1文件名输入框
         self._add_param_entry(group1_frame, "group1_summary_filename", "保存文件名", self.params.get("group1_summary_filename", "Test1_summary.csv"), row=7)
+
         # 为第一组添加开始和停止按钮
         group1_buttons = tk.Frame(group1_frame)
-        group1_buttons.grid(row=8, column=0, columnspan=3, pady=4)
+        group1_buttons.grid(row=10, column=0, columnspan=3, pady=4)
         self.btn_group1_start = tk.Button(
             group1_buttons, text="开始测试", command=self.start_group1, 
             bg="#4CAF50", fg="#FFFFFF", width=12
@@ -1226,17 +1297,24 @@ class CT_W_GUI:
         group2_frame = tk.LabelFrame(param_frame, text="第二组测试", padx=6, pady=6)
         group2_frame.pack(fill="x", padx=6, pady=4)
     
-        self._add_param_entry(group2_frame, "group2_start_mA", "初始电流:", self.params.get("group2_start_mA", 400.0), row=0)
-        self._add_param_entry(group2_frame, "group2_stop_mA", "终止电流:", self.params.get("group2_stop_mA", 0.5), row=1)
-        self._add_param_entry(group2_frame, "group2_step_mA", "步进电流:", self.params.get("group2_step_mA", 5.0), row=2)
-        self._add_param_entry(group2_frame, "group2_temp_C", "测试温度:", self.params.get("group2_temp_C", 25.0), row=3)
+        # 新增：组2循环进度状态标签
+        self.group2_loop_status = tk.Label(group2_frame, text="循环进度: 未开始", fg="blue")
+        self.group2_loop_status.grid(row=0, column=0, columnspan=3, pady=2)
+        # 新增：组2循环次数输入框
+        self._add_param_entry(group2_frame, "group2_loop_count", "循环次数:", self.params.get("group2_loop_count", 1), row=1)
+
+        self._add_param_entry(group2_frame, "group2_start_mA", "初始电流:", self.params.get("group2_start_mA", 400.0), row=2)
+        self._add_param_entry(group2_frame, "group2_stop_mA", "终止电流:", self.params.get("group2_stop_mA", 0.5), row=3)
+        self._add_param_entry(group2_frame, "group2_step_mA", "步进电流:", self.params.get("group2_step_mA", 5.0), row=4)
+        self._add_param_entry(group2_frame, "group2_temp_C", "测试温度:", self.params.get("group2_temp_C", 25.0), row=5)
         # 新增：组2时延参数输入框
-        self._add_param_entry(group2_frame, "group2_delay_s", "稳定时间:", self.params.get("group2_delay_s", 2), row=4)
+        self._add_param_entry(group2_frame, "group2_delay_s", "稳定时间:", self.params.get("group2_delay_s", 2), row=6)
         # 新增：组2文件名输入框
-        self._add_param_entry(group2_frame, "group2_summary_filename", "保存文件名:", self.params.get("group2_summary_filename", "Test2_summary.csv"), row=5)
+        self._add_param_entry(group2_frame, "group2_summary_filename", "保存文件名:", self.params.get("group2_summary_filename", "Test2_summary.csv"), row=7)
+        
         # 为第二组添加开始和停止按钮
         group2_buttons = tk.Frame(group2_frame)
-        group2_buttons.grid(row=6, column=0, columnspan=3, pady=4)
+        group2_buttons.grid(row=8, column=0, columnspan=3, pady=4)
         self.btn_group2_start = tk.Button(
             group2_buttons, text="开始测试", command=self.start_group2, 
             bg="#4CAF50", fg="#FFFFFF", width=12
@@ -1467,7 +1545,9 @@ class CT_W_GUI:
                         # 新增：传递文件名参数
                         summary_filename=p["group1_summary_filename"],
                         # 新增：传递电流参数
-                        current_mA=p["current_mA"]
+                        current_mA=p["current_mA"],
+                        # 新增：传递循环次数参数
+                        loop_count=int(p["group1_loop_count"])
                     )
                     # 在测试完成后调用绘图函数，并传递文件名参数
                     img_path = self.runner.plot_group1_wavelength_vs_temperature(
@@ -1555,7 +1635,9 @@ class CT_W_GUI:
                         # 新增：传递组2时延参数
                         delay_s=p["group2_delay_s"],
                         # 新增：传递文件名参数
-                        summary_filename=p["group2_summary_filename"]
+                        summary_filename=p["group2_summary_filename"],
+                        # 新增：传递循环次数参数
+                        loop_count=int(p["group2_loop_count"])
                     )
                     import glob
                     
@@ -1666,4 +1748,4 @@ if __name__ == "__main__":
     gui = CT_W_GUI()
     gui.run()
 
-# pyinstaller --onefile --noconsole --icon="D:\pack\PreciLasers.ico" --hidden-import=pyvisa --clean "D:\Coding\Project\DataAutomation\InstrumentControlSystem\测试系统\qijian\01-电流温度调谐\CT_Wv12.py"
+# pyinstaller --onefile --noconsole --icon="D:\pack\PreciLasers.ico" --hidden-import=pyvisa --clean "D:\Coding\Project\PreciTestSystem\PTS\test\CT_W.py"
