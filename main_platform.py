@@ -37,8 +37,9 @@ def run_module_process(module_name, start_method, msg_queue, cmd_queue):
             from zhongzi.Rin_FSV3004 import RinGUI as gui_class
         elif module_name == "Rin_4051":
             from zhongzi.Rin_4051 import Rin_4051_GUI as gui_class
-        elif module_name == "线宽":
-            from zhongzi.LineWidth import LineWidthGUI as gui_class
+        elif module_name == "线宽_FSV3004":
+            from zhongzi.LineWidth_FSV3004 import LineWidth_FSV3004_GUI as gui_class
+
         elif module_name == "时域":
             from zhongzi.TimeDomain import TimeDomainGUI as gui_class
         elif module_name == "信噪比":
@@ -125,7 +126,7 @@ def run_module_process(module_name, start_method, msg_queue, cmd_queue):
 MODULE_MAP = {
     "Rin_FSV3004": {"start_method": "start_rin", "group": "zhongzi"},
     "Rin_4051": {"start_method": "start_test", "group": "zhongzi"},
-    "线宽": {"start_method": "start_measurement", "group": "zhongzi"},
+    "线宽_FSV3004": {"start_method": "start_measurement", "group": "zhongzi"},
     "时域": {"start_method": "start_test", "group": "zhongzi"},
     "信噪比": {"start_method": "start_test", "group": "zhongzi"},
     "单频": {"start_method": "start", "group": "zhongzi"},

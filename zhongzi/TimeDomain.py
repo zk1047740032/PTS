@@ -144,12 +144,13 @@ class TimeDomain:
         self.log(f"[示波器] 波形垂直刻度从 {initial_scale:.3f} V/div 调整到 {final_scale:.3f} V/div")
 
     def configure_gen(self):
-        self.log(f"[信号源] 设置 TRI 波...")
-        self.gen.write(f":SOUR1:FUNC TRI")
-        self.gen.write(f":SOUR1:FREQ {self.params['GEN_FREQ']}")
-        self.gen.write(f":SOUR1:VOLT {self.params['GEN_VOLT']}")
-        self.gen.write(f":SOUR1:VOLT:OFFS {self.params['GEN_OFFSET']}")
-        self.gen.write(":OUTP1 ON")
+        ch = self.params['GEN_CH']
+        self.log(f"[信号源] 设置通道 {ch} TRI 波...")
+        self.gen.write(f":SOUR{ch}:FUNC TRI")
+        self.gen.write(f":SOUR{ch}:FREQ {self.params['GEN_FREQ']}")
+        self.gen.write(f":SOUR{ch}:VOLT {self.params['GEN_VOLT']}")
+        self.gen.write(f":SOUR{ch}:VOLT:OFFS {self.params['GEN_OFFSET']}")
+        self.gen.write(f":OUTP{ch} ON")
         time.sleep(1.5)
 
     def read_measurement(self, cmd, channel=None, retries=5, delay=0.8):
@@ -198,7 +199,8 @@ class TimeDomain:
                 self.scope.close()
         if self.gen:
             try:
-                self.gen.write(":OUTPut OFF")
+                ch = self.params['GEN_CH']
+                self.gen.write(f":OUTP{ch} OFF")
                 self.log("[信号源] 已发送停止输出指令")
             except Exception as e:
                 self.log(f"[错误] 发送停止输出指令失败：{e}")
@@ -215,7 +217,7 @@ class TimeDomainGUI:
         if parent is None:
             self.root = tk.Tk()
             self.root.title("时域 - 独立模式")
-            self.root.geometry("1320x345") 
+            self.root.geometry("1320x420") 
             self.root.resizable(True, True)
         else:
             self.root = parent # <--- 修改点：直接使用父 Frame
@@ -228,6 +230,7 @@ class TimeDomainGUI:
             "GEN_FREQ": 100,  # 内部使用，不显示在UI
             "GEN_VOLT": 10,
             "GEN_OFFSET": 5,
+            "GEN_CH": 2,
             "SCOPE_CH": "CHAN1",
         }
 
@@ -236,6 +239,8 @@ class TimeDomainGUI:
             "SCOPE_IP": "示波器IP",
             "GEN_IP": "信号源IP",
             "OUTPUT_DIR": "输出目录",
+            "GEN_CH": "信号通道",
+            "SCOPE_CH": "示波器通道",
             "GEN_VOLT": "信号幅度(V)",
             "GEN_OFFSET": "信号偏置(V)",
         }
@@ -266,7 +271,7 @@ class TimeDomainGUI:
         row = 0
         for key, val in self.params.items():
             # 跳过GEN_FREQ和SCOPE_CH，不显示在UI中
-            if key in ["GEN_FREQ", "SCOPE_CH"]:
+            if key in ["GEN_FREQ"]:
                 continue
             tk.Label(param_frame, text=self.param_labels[key]).grid(row=row, column=0, sticky="e", padx=5, pady=2)
             entry = tk.Entry(param_frame, width=30)

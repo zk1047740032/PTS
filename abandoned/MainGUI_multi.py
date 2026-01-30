@@ -33,8 +33,9 @@ def import_Rin_4051():
     return Rin_4051_GUI
 
 def import_LineWidth():
-    from zhongzi.LineWidth import LineWidthGUI
+    from zhongzi.LineWidth_FSV3004 import LineWidthGUI
     return LineWidthGUI
+
 
 def import_TimeDomain():
     from zhongzi.TimeDomain import TimeDomainGUI

@@ -20,7 +20,8 @@ try:
     # 导入所有子模块的 GUI 类
     from zhongzi.Rin_FSV3004 import RinGUI as Rin_FSV3004_GUI
     from zhongzi.Rin_4051 import Rin_4051_GUI
-    from zhongzi.LineWidth import LineWidthGUI
+    from zhongzi.LineWidth_FSV3004 import LineWidthGUI
+
     from zhongzi.TimeDomain import TimeDomainGUI
     from zhongzi.SpectrumSNR import SpectrumSNRGUI
     from zhongzi.SingleFrequency import SingleFrequencyGUI

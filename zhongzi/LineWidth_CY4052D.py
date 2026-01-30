@@ -31,7 +31,7 @@ class SignalGenerator:
 
     def connect(self, ip_address):
         self.rm = pyvisa.ResourceManager()
-        self.inst = self.rm.open_resource(f'TCPIP0::{ip_address}::inst0::INSTR')
+        self.inst = self.rm.open_resource(f'TCPIP0::{ip_address}::5025::SOCKET')
         self.inst.timeout = 10000
         self.inst.read_termination = '\n'
         self.inst.write_termination = '\n'
@@ -108,15 +108,17 @@ class LinewidthTester:
     def configure(self, ref_level, M1_position, center_freq, span, rbw, n_db_down):
         self.inst.write("INIT:CONT OFF")  # 关闭连续扫描
         # 添加单位：中心频率使用MHZ，带宽使用MHZ，RBW使用HZ
-        self.inst.write(f"DISP:TRAC:Y:RLEV {ref_level}mV")  # 设置参考电平
-        self.inst.write(f"CALC:MARKer1:X {M1_position}MHz") # 设置M1位置
-        self.inst.write(f"FREQ:CENT {center_freq}MHZ")
-        self.inst.write(f"FREQ:SPAN {span}KHZ")
-        self.inst.write(f"BAND {rbw}HZ")
-        self.inst.write(f"CALC:UNIT:POW V")
+
+        self.inst.write("DET RMS") # 设置检测方式为RMS
+        self.inst.write("TRAC1:TYPE AVERage")  # 设置Trace1为平均
+        self.inst.write(f":DISP:WIND:TRAC:Y:RLEV {ref_level}mV")  # 设置参考电平
+        self.inst.write(f"FREQ:CENT {center_freq}MHZ") # 设置中心频率
+        self.inst.write(f"FREQ:SPAN {span}KHZ") # 设置扫描跨度
+        self.inst.write(f"BAND {rbw}HZ") # 设置RBW
+        self.inst.write(f":UNIT:POWer V") # 设置单位为V
         self.inst.write("SWE:POIN 2001")  # 设置扫描点数
-        self.inst.write(":AVER:COUN 20") # 设置单位为V
-        #self.log("设置Count数为20")
+        self.inst.write(":AVER:COUN 20") # 设置平均次数为20
+
         self.n_db_down = n_db_down
         self.log("完成参数设置")
 
@@ -126,65 +128,124 @@ class LinewidthTester:
         self.inst.write("INIT;*WAI")  # 开始测量并等待完成
         if self.stop_flag.is_set():
             return False
-        self.inst.write("CALC:MARK1 ON")  # 启用 Marker1
-        self.inst.write("CALC:MARK:FUNC:NDBD:STAT ON")  # 打开NdBdown
-        self.inst.write(f"CALC:MARK1:FUNC:NDBD {self.n_db_down}")  # 设置 N 的值
-        #self.inst.write("CALC:MARK:MAX:AUTO ON")  # 移动 Marker 到最大峰值
-        #self.inst.write("CALC:MARK1:FUNC:EXEC")  # 执行功能计算
+        self.inst.write("DET RMS") # 设置检测方式为RMS
+        self.inst.write(":CALC:MARK1:MODE POSition")
+        self.inst.write(":CALC:BWID ON")
+        self.inst.write(":CALC:MARK1:MAX")
+        self.inst.write(":CALC:MARK1:CENT")
+        self.inst.write(":CALC:MARK1:CPS ON")
+
+        #self.inst.write(":CALCulate:MARKer1:STATe ON")  # 启用 Marker1
+        #self.inst.write(":CALCulate:MARKer1:FUNCtion:NDBDown:STATe ON")  # 打开NdBdown
+        #self.inst.write(f":CALCulate:MARKer1:FUNCtion:NDBDown {self.n_db_down}")  # 设置 N 的值
+
+        #self.inst.write(":CALCulate:MARKer1:FUNCtion:MAX:AUTO ON")  # 移动 Marker 到最大峰值
+        #self.inst.write(":CALCulate:MARKer1:FUNCtion:EXEC")  # 执行功能计算
         self.log("测量完成")
         return True
 
     def save_data(self, instr_image_path, instr_trace_csv, pc_shared_folder):
         if self.stop_flag.is_set():
             return False
+        
         try:
-            # 确保仪器本地路径使用C:\PTS\LineWidth目录
-            # 提取文件名
-            image_filename = os.path.basename(instr_image_path)
+            # --- 1. 准备路径 ---
+            img_filename = os.path.basename(instr_image_path)
             csv_filename = os.path.basename(instr_trace_csv)
             
-            # 构建仪器本地完整路径
-            instrument_image_path = f"C:\\PTS\\zhongzi\\LineWidth\\{image_filename}"
-            instrument_csv_path = f"C:\\PTS\\zhongzi\\LineWidth\\{csv_filename}"
+            # 【关键修改】仪器端临时路径 (使用用户确认的 Linux 路径)
+            # 注意：文件名不要包含中文或特殊字符
+            temp_inst_img = "/usrdata/Images/py_temp_screen.png"
             
-            # 1. 保存截图到仪器本地路径
-            self.inst.write("HCOPy:DEST 'MMEM'")
-            self.inst.write(f"MMEM:NAME '{instrument_image_path}'")
-            self.inst.write("HCOPy:IMM")
-            self.inst.query("*OPC?")
-            self.log(f"截图已保存到仪器内部: {instrument_image_path}")
-
-            # 2. 保存Trace数据到仪器本地路径
-            self.inst.write(f":MMEM:STOR:TRAC 1, '{instrument_csv_path}'")
-            self.inst.query("*OPC?")
-            self.log(f"Trace数据已保存到仪器内部: {instrument_csv_path}")
-
-            # 3. 将文件从仪器复制到电脑共享文件夹，使用与仪器本地路径相同的文件名
-            dat_filename = os.path.splitext(csv_filename)[0] + '.dat'
-            
-            # 构建电脑共享文件夹中的完整路径
-            pc_image_path = os.path.join(pc_shared_folder, image_filename)
+            # 电脑端最终保存路径
+            pc_image_path = os.path.join(pc_shared_folder, img_filename)
             pc_trace_csv = os.path.join(pc_shared_folder, csv_filename)
+            
+            # 确保电脑目录存在
+            if not os.path.exists(pc_shared_folder):
+                os.makedirs(pc_shared_folder)
+
+            # ==============================
+            # A. 截图部分 (已适配 Linux 路径)
+            # ==============================
+            self.log(f"正在执行截图...")
+            
+            # 1. 发送截图指令
+            # 指令: :MMEM:STOR:SCR "/usrdata/Images/py_temp_screen.png"
+            # 注意 Python 字符串转义，这里外层用单引号，内层路径用双引号，与您的记录保持一致
+            self.inst.write(f':MMEM:STORe:SCReen "{temp_inst_img}"')
+            
+            # 等待写入完成 (关键步骤)
+            self.inst.query("*OPC?") 
+            
+            # 2. 回读图片文件
+            self.log("正在回传截图文件...")
+            # 使用 VISA 读取二进制数据
+            img_data = self.inst.query_binary_values(f':MMEM:DATA? "{temp_inst_img}"', datatype='B', container=bytearray)
+            
+            # 3. 保存到电脑
+            with open(pc_image_path, 'wb') as f:
+                f.write(img_data)
+            
+            # 4. 删除仪器临时文件 (清理现场)
+            self.inst.write(f':MMEM:DELete "{temp_inst_img}"')
+            self.log(f"截图已保存: {img_filename}")
+
+            # ==============================
+            # B. Trace数据部分 (直接读取，无需存文件)
+            # ==============================
+            self.log(f"正在读取 Trace 数据...")
+            
+            try:
+                # 1. 获取坐标轴信息
+                start_freq = float(self.inst.query(":FREQuency:STARt?"))
+                stop_freq = float(self.inst.query(":FREQuency:STOP?"))
+                points = int(self.inst.query(":SWEep:POINts?"))
+                
+                # 2. 读取 Trace1 的幅度数据
+                # :FETCh:SANalyzer1? 是获取当前测量数据的标准指令
+                # 如果这个指令报错，可以尝试 :TRACe:DATA? TRACE1
+                y_data_str = self.inst.query(":FETCh:SANalyzer1?")
+                y_data = [float(x) for x in y_data_str.split(',')]
+                
+                # 3. 校验点数
+                if len(y_data) != points:
+                    points = len(y_data) # 以实际读取为准
+
+                # 4. 电脑端生成 CSV
+                step = (stop_freq - start_freq) / (points - 1) if points > 1 else 0
+                
+                with open(pc_trace_csv, 'w', newline='') as f:
+                    # 写入表头
+                    f.write("Frequency(Hz),Amplitude(dBm)\n")
+                    for i in range(points):
+                        freq = start_freq + i * step
+                        f.write(f"{freq:.2f},{y_data[i]:.4f}\n")
+                
+                self.log(f"Trace数据已保存: {csv_filename}")
+                
+            except Exception as e:
+                self.log(f"[错误] Trace数据读取失败: {e}")
+                pass # 即使 Trace 失败，也保留截图结果
+
+            # --- C. 生成 .dat 副本 (保留原逻辑) ---
+            dat_filename = os.path.splitext(csv_filename)[0] + '.dat'
             pc_trace_dat = os.path.join(pc_shared_folder, dat_filename)
             
-            # 复制文件
-            self.inst.write(f"MMEM:COPY '{instrument_image_path}', '{pc_image_path}'")
-            self.inst.query("*OPC?")
-            self.log(f"截图已复制到电脑共享文件夹: {image_filename}")
-
-            self.inst.write(f"MMEM:COPY '{instrument_csv_path}', '{pc_trace_csv}'")
-            self.inst.query("*OPC?")
-            self.log(f"Trace数据已复制到电脑共享文件夹: {csv_filename}")
-
-            # 4. 生成dat文件，复制csv改扩展名
             if os.path.exists(pc_trace_csv):
+                import shutil
                 shutil.copyfile(pc_trace_csv, pc_trace_dat)
-                self.log(f"已生成同目录的dat 文件: {dat_filename}")
+                self.log(f"已生成dat副本: {dat_filename}")
             
             return pc_image_path
 
         except Exception as e:
-            self.log(f"保存数据失败: {e}")
+            self.log(f"保存过程出错: {e}")
+            # 尝试清理临时文件
+            try:
+                self.inst.write(f':MMEM:DELete "{temp_inst_img}"')
+            except:
+                pass
             raise
 
     def close(self):
@@ -197,7 +258,7 @@ class LinewidthTester:
         self.log("测量已停止")
 
 # ============ GUI 控制类 ============
-class LineWidthGUI:
+class LineWidth_CY4052D_GUI:
     def __init__(self, parent=None):
         self.parent = parent
         
@@ -737,5 +798,5 @@ class LineWidthGUI:
 
 # ============ 程序入口 ============
 if __name__ == '__main__':
-    gui = LineWidthGUI()
+    gui = LineWidth_CY4052D_GUI()
     gui.run()
