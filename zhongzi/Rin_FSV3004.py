@@ -85,10 +85,13 @@ class RinAnalyzer:
         # 等待文件同步的默认超时（秒）及轮询间隔
         self.file_wait_timeout_s = 30.0
         self.file_wait_poll_s = 0.5
+        # 仪器IP地址
+        self.ip_address = "192.168.7.10"
 
     # 连接仪器（保持原命令）
     def connect(self, ip_address="192.168.7.10", port=5025):
         try:
+            self.ip_address = ip_address
             self.rm = pyvisa.ResourceManager()
             # 使用 SOCKET 地址（与原脚本一致）
             self.instrument = self.rm.open_resource(f"TCPIP0::{ip_address}::{port}::SOCKET")
@@ -140,11 +143,10 @@ class RinAnalyzer:
             self.log(f"数据已存储在仪器内部: {instrument_path}")
 
             # 复制到共享目录（保留原逻辑）
-            instrument_ip = "192.168.7.10"
             source_path = "C:\\PTS\\Rin"
             dest_path = r"\\192.168.7.7\PTS\zhongzi\Rin\FSV3004"
             rm = pyvisa.ResourceManager()
-            instr = rm.open_resource(f"TCPIP0::{instrument_ip}::inst0::INSTR")
+            instr = rm.open_resource(f"TCPIP0::{self.ip_address}::inst0::INSTR")
             instr.write(f"MMEM:COPY '{source_path}\\*.*','{dest_path}'")
             instr.close()
             self.log(f"文件已从仪器复制到电脑共享文件夹：{dest_path}")
@@ -529,9 +531,12 @@ class BackgroundNoiseAnalyzer:
         self.rm = None
         self.instrument = None
         self.log = log_func
+        # 仪器IP地址
+        self.ip_address = "192.168.7.10"
 
     def connect(self, ip_address="192.168.7.10", port=5025):
         try:
+            self.ip_address = ip_address
             self.rm = pyvisa.ResourceManager()
             self.instrument = self.rm.open_resource(f"TCPIP0::{ip_address}::{port}::SOCKET")
             self.instrument.timeout = 60000
@@ -592,11 +597,10 @@ class BackgroundNoiseAnalyzer:
             self.log("仪器已截图并保存。")
 
             # 复制到共享目录（按 Rin 的简化实现：一次性复制整个仪器目录到目标）
-            instrument_ip = "192.168.7.10"
             source_path = "C:\\PTS\\Rin"
             dest_path = r"\\192.168.7.7\PTS\zhongzi\Rin\FSV3004"
             rm = pyvisa.ResourceManager()
-            instr = rm.open_resource(f"TCPIP0::{instrument_ip}::inst0::INSTR")
+            instr = rm.open_resource(f"TCPIP0::{self.ip_address}::inst0::INSTR")
             # 使用通配符一次性复制（与 Rin 的实现保持一致，注意：健壮性较低，但与用户要求一致）
             instr.write(f"MMEM:COPY '{source_path}\\*.*','{dest_path}'")
             instr.close()
@@ -706,7 +710,7 @@ class TestRunner:
         self._stop = True
         self.log("[Runner] 停止信号已设置")
 
-    def run_rin(self, ra: RinAnalyzer, ui_root: tk.Tk):
+    def run_rin(self, ra: RinAnalyzer, ui_root: tk.Tk, ip_address="192.168.7.10"):
         """
         Run RIN sequence - this mirrors the original Rin(ra) function behavior but routed through log_func.
         保持原来测量段、顺序、文件拷贝、process_files、visualize_data 等逻辑不变。
@@ -731,9 +735,8 @@ class TestRunner:
 
                 # 仪器目录清空
                 try:
-                    ip = "192.168.7.10"
                     rm = pyvisa.ResourceManager()
-                    inst = rm.open_resource(f"TCPIP0::{ip}::5025::SOCKET")
+                    inst = rm.open_resource(f"TCPIP0::{ip_address}::5025::SOCKET")
                     inst.write("MMEM:MDIR 'C:\\PTS\\Rin'")  # 确保路径存在
                     inst.write("MMEM:DEL 'C:\\PTS\\Rin\\*.*'")
                     #inst.query("*OPC?")
@@ -748,7 +751,7 @@ class TestRunner:
             ra.ui_root = ui_root
             ra.log = self.log  # route analyzer logs to gui
 
-            if ra.connect():
+            if ra.connect(ip_address=ip_address):
                 ra.configure_instrument()
                 measurement_params = [
                     (10, 100, 5, 20, "Rin_1.DAT"),
@@ -801,10 +804,10 @@ class TestRunner:
         except Exception as e:
             self.log(f"[Runner Exception] {e}\n{traceback.format_exc()}")
 
-    def run_background(self, bna: BackgroundNoiseAnalyzer, ui_root: tk.Tk, is_seedlight=False):
+    def run_background(self, bna: BackgroundNoiseAnalyzer, ui_root: tk.Tk, ip_address="192.168.7.10", is_seedlight=False):
         try:
             bna.log = self.log
-            if bna.connect():
+            if bna.connect(ip_address=ip_address):
                 # 根据是否为种子光设置不同的文件名
                 if is_seedlight:
                     screenshot_name = "SeedLight_Screen.png"
@@ -1059,7 +1062,7 @@ class RinGUI:
                 self.btn_connect.config(state=tk.DISABLED)
                 self.btn_stop.config(state=tk.NORMAL)
                 self.runner._stop = False
-                self.runner.run_rin(ra, self.root)
+                self.runner.run_rin(ra, self.root, ip_address=p.get("osa_ip", "192.168.7.10"))
             except Exception as e:
                 self.log(f"[线程异常] {e}\n{traceback.format_exc()}")
             finally:
@@ -1093,7 +1096,7 @@ class RinGUI:
                 self.btn_connect.config(state=tk.DISABLED)
                 self.btn_stop.config(state=tk.NORMAL)
                 self.runner._stop = False
-                self.runner.run_background(bna, self.root, is_seedlight=False)
+                self.runner.run_background(bna, self.root, ip_address=p.get("osa_ip", "192.168.7.10"), is_seedlight=False)
             except Exception as e:
                 self.log(f"[线程异常] {e}\n{traceback.format_exc()}")
             finally:
@@ -1128,7 +1131,7 @@ class RinGUI:
                 self.btn_connect.config(state=tk.DISABLED)
                 self.btn_stop.config(state=tk.NORMAL)
                 self.runner._stop = False
-                self.runner.run_background(bna, self.root, is_seedlight=True)
+                self.runner.run_background(bna, self.root, ip_address=p.get("osa_ip", "192.168.7.10"), is_seedlight=True)
             except Exception as e:
                 self.log(f"[线程异常] {e}\n{traceback.format_exc()}")
             finally:

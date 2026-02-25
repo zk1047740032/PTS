@@ -136,7 +136,11 @@ MODULE_MAP = {
 }
 
 MODULE_GROUPS = {
-    "种子": [name for name, info in MODULE_MAP.items() if info["group"] == "zhongzi"],
+    "种子": {
+        "通道1": [name for name, info in MODULE_MAP.items() if info["group"] == "zhongzi"],
+        "通道2": [],
+        "通道3": []
+    },
     "器件": [name for name, info in MODULE_MAP.items() if info["group"] == "qijian"],
 }
 
@@ -197,27 +201,53 @@ class IntegratedPlatform:
             frame = ttk.Frame(self.nb)
             self.nb.add(frame, text=f" {group_name} ")
             
-            canvas = tk.Canvas(frame, bg="white")
-            scrollbar = ttk.Scrollbar(frame, orient="vertical", command=canvas.yview)
-            scroll_frame = tk.Frame(canvas, bg="white")
+            if group_name == "种子":
+                sub_nb = ttk.Notebook(frame)
+                sub_nb.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+                
+                for channel_name, channel_modules in module_list.items():
+                    channel_frame = ttk.Frame(sub_nb)
+                    sub_nb.add(channel_frame, text=f" {channel_name} ")
+                    
+                    canvas = tk.Canvas(channel_frame, bg="white")
+                    scrollbar = ttk.Scrollbar(channel_frame, orient="vertical", command=canvas.yview)
+                    scroll_frame = tk.Frame(canvas, bg="white")
 
-            scroll_frame.bind("<Configure>", lambda e, c=canvas: c.configure(scrollregion=c.bbox("all")))
-            canvas.create_window((0, 0), window=scroll_frame, anchor="nw")
-            canvas.configure(yscrollcommand=scrollbar.set)
+                    scroll_frame.bind("<Configure>", lambda e, c=canvas: c.configure(scrollregion=c.bbox("all")))
+                    canvas.create_window((0, 0), window=scroll_frame, anchor="nw")
+                    canvas.configure(yscrollcommand=scrollbar.set)
 
-            canvas.pack(side="left", fill="both", expand=True)
-            scrollbar.pack(side="right", fill="y")
+                    canvas.pack(side="left", fill="both", expand=True)
+                    scrollbar.pack(side="right", fill="y")
 
-            for name in module_list:
-                var = tk.BooleanVar()
-                self.check_vars[name] = var
-                # 使用command属性处理勾选状态变化
-                cb = ttk.Checkbutton(scroll_frame, text=name, variable=var, 
-                                     command=lambda n=name: self.on_test_item_checked(n),
-                                     style="TestCheckbutton.TCheckbutton")
-                # 绑定双击事件，实现双击打开窗口功能
-                cb.bind("<Double-1>", lambda e, n=name, w=cb: self.on_test_item_double_click(e, n, w))
-                cb.pack(anchor="w", padx=10, pady=5)
+                    for name in channel_modules:
+                        var = tk.BooleanVar()
+                        self.check_vars[name] = var
+                        cb = ttk.Checkbutton(scroll_frame, text=name, variable=var, 
+                                             command=lambda n=name: self.on_test_item_checked(n),
+                                             style="TestCheckbutton.TCheckbutton")
+                        cb.bind("<Double-1>", lambda e, n=name, w=cb: self.on_test_item_double_click(e, n, w))
+                        cb.pack(anchor="w", padx=10, pady=5)
+            else:
+                canvas = tk.Canvas(frame, bg="white")
+                scrollbar = ttk.Scrollbar(frame, orient="vertical", command=canvas.yview)
+                scroll_frame = tk.Frame(canvas, bg="white")
+
+                scroll_frame.bind("<Configure>", lambda e, c=canvas: c.configure(scrollregion=c.bbox("all")))
+                canvas.create_window((0, 0), window=scroll_frame, anchor="nw")
+                canvas.configure(yscrollcommand=scrollbar.set)
+
+                canvas.pack(side="left", fill="both", expand=True)
+                scrollbar.pack(side="right", fill="y")
+
+                for name in module_list:
+                    var = tk.BooleanVar()
+                    self.check_vars[name] = var
+                    cb = ttk.Checkbutton(scroll_frame, text=name, variable=var, 
+                                         command=lambda n=name: self.on_test_item_checked(n),
+                                         style="TestCheckbutton.TCheckbutton")
+                    cb.bind("<Double-1>", lambda e, n=name, w=cb: self.on_test_item_double_click(e, n, w))
+                    cb.pack(anchor="w", padx=10, pady=5)
 
         # 底部按钮区
         bottom_frame = tk.Frame(control_panel, bg="#ffffff")
@@ -548,31 +578,74 @@ class IntegratedPlatform:
 
             self.root.after(200, self.process_queue_messages)
 
-    def select_all(self):
+    def get_current_module_list(self):
+        """
+        辅助函数：根据当前激活的页签（包括嵌套的子页签），获取对应的模块名称列表。
+        """
         try:
-            current_tab = self.nb.select()
-            current_tab_text = self.nb.tab(current_tab, "text").strip()
-            if current_tab_text in MODULE_GROUPS:
-                for name in MODULE_GROUPS[current_tab_text]:
-                    if name in self.check_vars:
-                        # 设置为True，这将触发 on_test_item_checked 从而打开窗口
-                        self.check_vars[name].set(True)
-                        # 手动调用一次，因为有些tk版本set()不触发command
-                        self.on_test_item_checked(name)
-        except Exception:
-            pass
+            # 1. 获取一级页签 (如 "种子" 或 "器件")
+            current_tab_id = self.nb.select()
+            if not current_tab_id: return []
+            
+            # 注意：IntegratedPlatform 不是控件，需用 self.root.nametowidget
+            top_frame = self.root.nametowidget(current_tab_id)
+            current_tab_text = self.nb.tab(current_tab_id, "text").strip()
+
+            if current_tab_text not in MODULE_GROUPS:
+                return []
+
+            group_data = MODULE_GROUPS[current_tab_text]
+
+            # 2. 判断是否为嵌套结构 (字典即为嵌套，如 "种子")
+            if isinstance(group_data, dict):
+                # 寻找一级页签下的子 Notebook 控件
+                sub_notebook = None
+                for child in top_frame.winfo_children():
+                    if isinstance(child, ttk.Notebook):
+                        sub_notebook = child
+                        break
+                
+                if sub_notebook:
+                    # 获取二级页签 (如 "通道1")
+                    sub_tab_id = sub_notebook.select()
+                    if sub_tab_id:
+                        sub_tab_text = sub_notebook.tab(sub_tab_id, "text").strip()
+                        # 返回对应通道的模块列表
+                        return group_data.get(sub_tab_text, [])
+                return []
+            
+            # 3. 扁平结构 (列表即为扁平，如 "器件")
+            elif isinstance(group_data, list):
+                return group_data
+                
+            return []
+
+        except Exception as e:
+            print(f"获取模块列表出错: {e}")
+            return []
+
+    def select_all(self):
+        """全选当前可见列表中的模块"""
+        target_modules = self.get_current_module_list()
+        
+        for name in target_modules:
+            if name in self.check_vars:
+                # 仅设置状态，不触发 on_test_item_checked (避免全选时误触发不需要的逻辑)
+                self.check_vars[name].set(True)
+                # 如果需要在勾选时做额外处理，可以解开下面这行，但通常全选只需改变变量
+                # self.on_test_item_checked(name)
 
     def deselect_all(self):
-        try:
-            current_tab = self.nb.select()
-            current_tab_text = self.nb.tab(current_tab, "text").strip()
-            if current_tab_text in MODULE_GROUPS:
-                for name in MODULE_GROUPS[current_tab_text]:
-                    if name in self.check_vars:
-                        self.check_vars[name].set(False)
-                        self.on_test_item_checked(name)
-        except Exception:
-            pass
+        """清空当前可见列表中的模块"""
+        target_modules = self.get_current_module_list()
+        
+        for name in target_modules:
+            if name in self.check_vars:
+                # 如果当前是勾选状态，才去取消
+                if self.check_vars[name].get():
+                    self.check_vars[name].set(False)
+                    # 取消勾选必须触发回调，因为需要通过它来关闭正在运行的进程
+                    self.on_test_item_checked(name)
 
     def on_close(self):
         for name, p in self.processes.items():
