@@ -236,7 +236,7 @@ class RinAnalyzer:
                             continue
             if len(file_dy) < 2001:
                 self.log(f"警告: 数据点数非2001，实际 {len(file_dy)}")
-                return false
+                return False
             self.dx.append(file_dx)
             self.dy.append(file_dy)
             return True
