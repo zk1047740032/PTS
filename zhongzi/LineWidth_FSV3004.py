@@ -57,10 +57,10 @@ class SignalGenerator:
         返回:
             bool: 连接成功返回 True，失败返回 False
         """
-        for attempt in range(max_retrues+1):
+        for attempt in range(max_retries+1):
             try:
                 self.rm = pyvisa.ResourceManager()
-                self.inst = self.rm.open_resource(f'TCPIP0::{ip_address}::inst0::INSTR')
+                self.inst = self.rm.open_resource(f'TCPIP0::{ip_address}::INSTR')
                 self.inst.timeout = 10000 # 设置通信超时时间，防止仪器无响应时程序无限等待
                 self.inst.read_termination = '\n'
                 self.inst.write_termination = '\n'
@@ -69,13 +69,13 @@ class SignalGenerator:
                 self.log(f"[信号源] 已连接到信号发生器（第{attempt+1}次尝试）")
                 return True
             except Exception as e:
-                if attemp<max_retries:
+                if attempt < max_retries:
                     self.log(f"[信号源] 第{attempt+1}次连接失败：{e}，{retry_interval}秒后重试...")
                     time.sleep(retry_interval)
                 else:
                     self.log(f"[信号源] 连接失败，共尝试{max_retries}次，请尝试手动断开重连")
                     return False
-            return False
+        return False
 
     def configure(self, waveform="SIN", freq=0.1, volt=0, offset=1):
         """
@@ -735,77 +735,82 @@ class LineWidth_FSV3004_GUI:
                 try:
                     # 创建并连接信号发生器
                     signal_gen = SignalGenerator(log_callback=self.log)
-                    signal_gen.connect(self.params['信号发生器IP'])
+                    connected = signal_gen.connect(self.params['信号发生器IP'])
                     
-                    # 配置信号发生器：正弦波、频率0.1Hz、幅值0vpp、偏移1vdc
-                    signal_gen.configure(waveform="SIN", freq=0.1, volt=0, offset=1)
-                    
-                    # 打开信号发生器输出
-                    signal_gen.set_output(on=True)
-                    
-                    # 等待信号稳定
-                    time.sleep(1)
-                    
-                    # ============ 额外线宽测试（Span=200kHz） ============
-                    self.log("\n[额外测试] 开始Span=200kHz的线宽测试")
-                    
-                    # 配置频谱仪Span=500kHz
-                    span = '500'
-                    self.log(f"[额外测试] 开始测试Span: {span}")
-                    
-                    # 配置参数，使用500kHz Span
-                    self.tester.configure(
-                        ref_level = self.params['Ref Level(mV)'],
-                        M1_position= self.params['M1位置(MHz)'],
-                        center_freq=self.params['中心频率(MHz)'],
-                        span=span,
-                        rbw=self.params['RBW(Hz)'],
-                        n_db_down=self.params['N dB down']
-                    )
-                    
-                    # 执行测量
-                    if self.tester.measure():
-                        # 为额外测试生成唯一文件名
-                        base_name = os.path.splitext(os.path.basename(self.params['仪器本地图片路径']))[0]
-                        span_suffix = '500+1v'  # 200kHz = 200K
+                    # 只有在成功连接信号发生器时才执行额外测试
+                    if connected:
+                        # 配置信号发生器：正弦波、频率0.1Hz、幅值0vpp、偏移1vdc
+                        signal_gen.configure(waveform="SIN", freq=0.1, volt=0, offset=1)
                         
-                        # 构建文件路径
-                        instr_image_path = os.path.join(
-                            os.path.dirname(self.params['仪器本地图片路径']),
-                            f"{base_name}_{span_suffix}_with_signal.png"
+                        # 打开信号发生器输出
+                        signal_gen.set_output(on=True)
+                        
+                        # 等待信号稳定
+                        time.sleep(1)
+                        
+                        # ============ 额外线宽测试（Span=200kHz） ============
+                        self.log("\n[额外测试] 开始Span=200kHz的线宽测试")
+                        
+                        # 配置频谱仪Span=500kHz
+                        span = '500'
+                        self.log(f"[额外测试] 开始测试Span: {span}")
+                        
+                        # 配置参数，使用500kHz Span
+                        self.tester.configure(
+                            ref_level = self.params['Ref Level(mV)'],
+                            M1_position= self.params['M1位置(MHz)'],
+                            center_freq=self.params['中心频率(MHz)'],
+                            span=span,
+                            rbw=self.params['RBW(Hz)'],
+                            n_db_down=self.params['N dB down']
                         )
                         
-                        instr_trace_csv = os.path.join(
-                            os.path.dirname(self.params['仪器本地数据路径']),
-                            f"{base_name}_{span_suffix}_with_signal.csv"
-                        )
+                        # 执行测量
+                        if self.tester.measure():
+                            # 为额外测试生成唯一文件名
+                            base_name = os.path.splitext(os.path.basename(self.params['仪器本地图片路径']))[0]
+                            span_suffix = '500+1v'  # 200kHz = 200K
+                            
+                            # 构建文件路径
+                            instr_image_path = os.path.join(
+                                os.path.dirname(self.params['仪器本地图片路径']),
+                                f"{base_name}_{span_suffix}_with_signal.png"
+                            )
+                            
+                            instr_trace_csv = os.path.join(
+                                os.path.dirname(self.params['仪器本地数据路径']),
+                                f"{base_name}_{span_suffix}_with_signal.csv"
+                            )
+                            
+                            # 保存数据
+                            image_path = self.tester.save_data(
+                                instr_image_path=instr_image_path,
+                                instr_trace_csv=instr_trace_csv,
+                                pc_shared_folder=self.params['输出目录']
+                            )
+                            
+                            if image_path and os.path.exists(image_path):
+                                # 保存结果信息
+                                all_results.append({
+                                    'image_path': image_path,
+                                    'span_value': span,
+                                    'file_name': os.path.basename(image_path)
+                                })
+                                self.log(f"[额外测试] Span: {span} 测试完成，结果已保存")
+                            else:
+                                self.log(f"[额外测试] Span: {span} 未找到截图文件")
                         
-                        # 保存数据
-                        image_path = self.tester.save_data(
-                            instr_image_path=instr_image_path,
-                            instr_trace_csv=instr_trace_csv,
-                            pc_shared_folder=self.params['输出目录']
-                        )
+                        # 关闭信号发生器输出
+                        signal_gen.set_output(on=False)
+                    else:
+                        self.log("[信号源] 未成功连接信号发生器，跳过额外测试")
                         
-                        if image_path and os.path.exists(image_path):
-                            # 保存结果信息
-                            all_results.append({
-                                'image_path': image_path,
-                                'span_value': span,
-                                'file_name': os.path.basename(image_path)
-                            })
-                            self.log(f"[额外测试] Span: {span} 测试完成，结果已保存")
-                        else:
-                            self.log(f"[额外测试] Span: {span} 未找到截图文件")
-                    
-                    # 关闭信号发生器输出
-                    signal_gen.set_output(on=False)
-                    
-                    # 关闭信号发生器连接
-                    signal_gen.close()
-                    
                 except Exception as e:
                     self.log(f"[错误] 信号发生器控制或额外测试失败：{e}")
+                finally:
+                    # 关闭信号发生器连接
+                    if 'signal_gen' in locals():
+                        signal_gen.close()
                 
                 # ============ 显示所有测试结果 ============
                 self.log(f"\n[最终结果] 共完成 {len(all_results)} 个Span测试")
