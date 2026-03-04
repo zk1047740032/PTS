@@ -23,21 +23,73 @@ else:
     scaling_factor = 1.0
 
 # ============ 信号发生器控制类 ============
+# 本类用于通过 LAN 接口远程控制信号发生器（如 Keysight/Agilent 33500B 系列），
+# 实现以下功能：
+# 1. 建立/关闭 TCPIP 连接；
+# 2. 配置输出波形类型、频率、幅值与直流偏移；
+# 3. 打开/关闭输出；
+# 4. 提供线程安全的日志回调，方便 GUI 实时显示状态。
+# 对外主要方法：
+# - connect(ip)          : 建立连接；
+# - configure(...)       : 一次性写入所有波形参数；
+# - set_output(on=True)  : 控制输出开关；
+# - close()              : 释放 VISA 资源。
 class SignalGenerator:
     def __init__(self, log_callback=None) -> None:
-        self.rm = None
-        self.inst = None
+        """
+        初始化信号发生器控制类
+
+        参数:
+            log_callback (callable, optional): 日志回调函数，用于输出日志信息
+        """
+        self.rm = None # 存储Visa资源管理器
+        self.inst = None # 存储仪器实例
         self.log = log_callback or (lambda msg: None)
 
-    def connect(self, ip_address):
-        self.rm = pyvisa.ResourceManager()
-        self.inst = self.rm.open_resource(f'TCPIP0::{ip_address}::inst0::INSTR')
-        self.inst.timeout = 10000
-        self.inst.read_termination = '\n'
-        self.inst.write_termination = '\n'
-        self.log(f"[信号源] 已连接到信号发生器")
+    def connect(self, ip_address, max_retries=3, retry_interval=2):
+        """
+        连接信号发生器（添加重试机制）
+
+        参数:
+            ip_address (str): 信号发生器的 IP 地址
+            max_retries (int, optional): 最大重试次数，默认3次
+            retry_interval (int, optional): 重试间隔时间（秒），默认2秒
+        返回:
+            bool: 连接成功返回 True，失败返回 False
+        """
+        for attempt in range(max_retrues+1):
+            try:
+                self.rm = pyvisa.ResourceManager()
+                self.inst = self.rm.open_resource(f'TCPIP0::{ip_address}::inst0::INSTR')
+                self.inst.timeout = 10000 # 设置通信超时时间，防止仪器无响应时程序无限等待
+                self.inst.read_termination = '\n'
+                self.inst.write_termination = '\n'
+                # 验证连接是否可用
+                self.inst.query('*IDN?')
+                self.log(f"[信号源] 已连接到信号发生器（第{attempt+1}次尝试）")
+                return True
+            except Exception as e:
+                if attemp<max_retries:
+                    self.log(f"[信号源] 第{attempt+1}次连接失败：{e}，{retry_interval}秒后重试...")
+                    time.sleep(retry_interval)
+                else:
+                    self.log(f"[信号源] 连接失败，共尝试{max_retries}次，请尝试手动断开重连")
+                    return False
+            return False
 
     def configure(self, waveform="SIN", freq=0.1, volt=0, offset=1):
+        """
+        配置信号发生器输出参数
+
+        参数:
+            waveform (str, optional): 波形类型，如"SIN"表示正弦波。默认"SIN"。
+            freq (float, optional): 输出频率，单位Hz。默认0.1 Hz。
+            volt (float, optional): 输出幅值，单位Vpp。默认0 Vpp。
+            offset (float, optional): 直流偏移，单位Vdc。默认1 Vdc。
+
+        返回:
+            bool: 配置成功返回True，失败返回False。
+        """
         if not self.inst:
             self.log("[信号源] 未连接到信号发生器")
             return False
@@ -64,6 +116,15 @@ class SignalGenerator:
             return False
 
     def set_output(self, on=True):
+        '''
+        设置信号发生器输出开关状态
+
+        参数:
+            on (bool, optional): 是否打开输出。True 表示打开，False 表示关闭。默认 True。
+
+        返回:
+            bool: 设置成功返回 True，失败返回 False。
+        '''
         if not self.inst:
             self.log("[信号源] 未连接到信号发生器")
             return False
@@ -80,39 +141,98 @@ class SignalGenerator:
             return False
 
     def close(self):
+        """
+        关闭信号发生器连接与资源管理器，释放VISA资源。
+
+        参数:
+            无
+
+        返回:
+            无
+        """
         if self.inst:
             try:
                 self.inst.close()
                 self.log("[信号源] 已关闭信号发生器连接")
+                self.inst = None
             except Exception:
                 pass
         if self.rm:
             try:
                 self.rm.close()
+                self.inst = None
             except Exception:
                 pass
 
-# ============ 仪器控制类 ============
+# ============ 频谱仪控制类 ============
+# 该类用于通过 LAN 接口远程控制 R&S FSV3004 频谱仪，完成线宽测试全流程：
+# 1. 连接与初始化；
+# 2. 根据给定参数配置频谱仪（参考电平、中心频率、Span、RBW、NdB down 等）；
+# 3. 触发单次扫描并放置 Marker1；
+# 4. 将截图与 Trace 数据保存到仪器本地指定目录；
+# 5. 通过 VISA 的 MMEM:COPY 指令把文件转存到电脑共享文件夹；
+# 6. 自动生成同名的 .dat 文件（复制 .csv 改扩展名）；
+# 7. 支持线程安全停止（stop_flag 事件）；
+# 8. 提供关闭连接与资源释放接口。
+# 对外主要方法：
+# - connect(ip)               : 建立 TCPIP 连接；
+# - configure(...)            : 一次性写入所有测试参数；
+# - measure()                 : 执行单次扫描并计算 NdB down；
+# - save_data(...)            : 完成截图、Trace 保存及文件拷贝；
+# - close() / stop()          : 资源释放与中止控制。
 class LinewidthTester:
     def __init__(self, log_callback=None) -> None:
+        """
+        初始化线宽测试仪控制类
+
+        参数:
+            log_callback (callable, optional): 日志回调函数，用于输出日志信息
+        """
         self.rm = pyvisa.ResourceManager()
         self.inst = None
         self.log = log_callback or (lambda msg: None)
         self.stop_flag = threading.Event()
 
     def connect(self, ip_address):
+        """
+        建立与频谱仪的 TCPIP 连接。
+
+        参数:
+            ip_address (str): 频谱仪的 IP 地址。
+
+        返回:
+            无
+        """
         self.inst = self.rm.open_resource(f'TCPIP0::{ip_address}::inst0::INSTR')
         self.inst.timeout = 10000
         self.log("已连接到频谱仪")
 
     def configure(self, ref_level, M1_position, center_freq, span, rbw, n_db_down):
+        """
+        配置频谱仪测量参数。
+
+        参数:
+            ref_level (float): 参考电平，单位为 mV。
+            M1_position (float): Marker1 所在频率位置，单位为 MHz。
+            center_freq (float): 中心频率，单位为 MHz。
+            span (float): 扫频宽度，单位为 kHz。
+            rbw (float): 分辨率带宽，单位为 Hz。
+            n_db_down (float): 用于线宽测量的 N dB 下降值。
+
+        返回:
+            无
+        """
         self.inst.write("INIT:CONT OFF")  # 关闭连续扫描
         # 添加单位：中心频率使用MHZ，带宽使用MHZ，RBW使用HZ
         self.inst.write(f"DISP:TRAC:Y:RLEV {ref_level}mV")  # 设置参考电平
         self.inst.write(f"CALC:MARKer1:X {M1_position}MHz") # 设置M1位置
+        # 设置中心频率，单位 MHz
         self.inst.write(f"FREQ:CENT {center_freq}MHZ")
+        # 设置扫频宽度（Span），单位 kHz
         self.inst.write(f"FREQ:SPAN {span}KHZ")
+        # 设置分辨率带宽（RBW），单位 Hz
         self.inst.write(f"BAND {rbw}HZ")
+        # 将功率单位设置为伏特（V），便于后续以电压方式读取测量结果
         self.inst.write(f"CALC:UNIT:POW V")
         self.inst.write("SWE:POIN 2001")  # 设置扫描点数
         self.inst.write(":AVER:COUN 20") # 设置单位为V
@@ -121,6 +241,18 @@ class LinewidthTester:
         self.log("完成参数设置")
 
     def measure(self):
+        """
+        执行单次扫描，启用 Marker1 并设置 NdB down 功能，用于后续线宽计算。
+
+        流程：
+        1. 检查停止标志，若已置位则直接返回 False；
+        2. 触发单次扫描并等待完成；
+        3. 打开 Marker1 及 NdB down 功能，写入预设的 N 值；
+        4. 记录日志并返回 True 表示测量成功。
+
+        返回:
+            bool: 成功完成测量返回 True；若中途被停止或异常返回 False。
+        """
         if self.stop_flag.is_set():
             return False
         self.inst.write("INIT;*WAI")  # 开始测量并等待完成
@@ -135,6 +267,20 @@ class LinewidthTester:
         return True
 
     def save_data(self, instr_image_path, instr_trace_csv, pc_shared_folder):
+        """
+        将频谱仪截图与Trace数据保存到仪器本地，并拷贝到电脑共享文件夹，同时生成同名.dat文件。
+
+        参数:
+            instr_image_path (str): 期望保存截图的仪器端完整路径（仅用于提取文件名）。
+            instr_trace_csv (str): 期望保存Trace数据的仪器端完整路径（仅用于提取文件名）。
+            pc_shared_folder (str): 电脑端共享文件夹路径，用于接收拷贝文件。
+
+        返回:
+            str: 电脑端截图文件的完整路径；若失败则返回None（异常会被抛出）。
+
+        异常:
+            Exception: 任意步骤失败时抛出，供上层捕获并记录日志。
+        """
         if self.stop_flag.is_set():
             return False
         try:
@@ -188,19 +334,63 @@ class LinewidthTester:
             raise
 
     def close(self):
+        """
+        关闭频谱仪连接与资源管理器，释放Visa资源。
+
+        参数：
+            无
+        返回：
+            无
+        """
         if self.inst:
-            self.inst.close()
-            self.log("连接已关闭")
+            try:
+                self.inst.close()
+                self.log(f"已关闭频谱仪连接")
+                self.inst = None
+            except Exception:
+                pass
+        if self.rm:
+            try:
+                self.rm.close()
+                self.rm = None
+            except Exception:
+                pass
 
     def stop(self):
+        """
+        停止当前测量线程。
+        
+        通过设置 stop_flag 事件通知测量线程立即终止后续操作，
+        并记录停止日志。
+        
+        参数:
+            无
+            
+        返回:
+            无
+        """
         self.stop_flag.set()
         self.log("测量已停止")
 
-# ============ GUI 控制类 ============
+# ============ 线宽测试 GUI 控制类 ============
+# 该类负责构建并管理线宽测试的图形化界面，支持以下功能：
+# 1. 参数输入与持久化（频谱仪/信号源 IP、测试参数等）；
+# 2. 一键启动/停止多 Span 自动化测试流程；
+# 3. 实时日志输出；
+# 4. 测试结果（截图 + Trace 数据）集中预览、手动保存；
+# 5. 支持独立窗口（tk.Tk）或嵌入外部 Frame（tk.Frame）两种运行模式；
+# 6. 线程安全，后台测试不阻塞 GUI。
+# 对外暴露：
+# - 实例化即可自动构建界面；
+# - 若传入 parent=Frame，则作为子控件嵌入；否则生成独立窗口。
 class LineWidth_FSV3004_GUI:
     def __init__(self, parent=None):
+        """
+        初始化线宽测试 GUI 控制类
+        参数:
+            parent (tk.Widget, optional): 父控件。若为 None，则创建独立窗口；否则作为子控件嵌入 parent。
+        """
         self.parent = parent
-        
         # --- 核心修改：如果是集成模式，直接使用父控件作为 root ---
         if parent is None:
             self.root = tk.Tk()
@@ -235,6 +425,17 @@ class LineWidth_FSV3004_GUI:
         self._build_ui()
     
     def set_center(self, window, width, height):
+        """
+        将指定窗口在屏幕上居中显示。
+
+        参数:
+            window (tk.Toplevel | tk.Tk): 需要居中的窗口对象。
+            width (int): 窗口宽度（像素）。
+            height (int): 窗口高度（像素）。
+
+        返回:
+            无
+        """
         sw = window.winfo_screenwidth()
         sh = window.winfo_screenheight()
         x = (sw - width) // 2
@@ -242,6 +443,22 @@ class LineWidth_FSV3004_GUI:
         window.geometry(f"{width}x{height}+{x}+{y}")
     
     def _build_ui(self):
+        """
+        构建并布局整个 GUI 界面。
+
+        功能：
+        1. 创建左右分栏的主框架；
+        2. 左侧依次放置“连接与地址”“参数设置”两个标签框架，以及居中显示的“开始/停止”按钮区；
+        3. 右侧放置“运行日志”标签框架，内含可滚动文本框；
+        4. 所有输入框统一宽度与标签对齐方式，保证界面整洁；
+        5. 将输入控件实例存入 self.entries，供后续读取与保存参数使用。
+
+        参数：
+            无
+
+        返回：
+            无
+        """
         # 创建主框架，分为左右两部分
         main_frame = tk.Frame(self.root)
         main_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
@@ -311,22 +528,67 @@ class LineWidth_FSV3004_GUI:
         self.log_box.pack(fill=tk.BOTH, expand=True)
         
     def log(self, msg):
+        """
+        将日志信息输出到 GUI 的日志框中，并自动滚动到最新内容。
+
+        参数:
+            msg (str): 要显示的日志文本。
+
+        返回:
+            无
+        """
         t = time.strftime('[%H:%M:%S]')
         self.root.after(0, lambda: self._safe_log_append(f"{t} {msg}\n"))
     
     def _safe_log_append(self, text):
+        """
+        线程安全地向日志文本框追加内容，并自动滚动到最新一行。
+
+        参数:
+            text (str): 需要追加的日志文本。
+
+        返回:
+            无
+        """
         self.log_box.insert(tk.END, text)
         self.log_box.see(tk.END)
     
     def _save_params(self):
-        """保存当前输入的参数"""
+        """
+        将当前界面中所有输入框的值保存到 self.params 字典中，
+        并在日志中提示参数已更新。
+        
+        参数:
+            无
+            
+        返回:
+            无
+        """
         for k, e in self.entries.items():
             v = e.get()
             self.params[k] = v
         self.log('[参数] 已更新')
     
     def start_measurement(self):
-        """开始测量"""
+        """
+        启动线宽测试流程。
+
+        功能：
+        1. 检查是否已有测试线程在运行，防止重复启动；
+        2. 保存当前界面参数到 self.params；
+        3. 禁用“开始”按钮、启用“停止”按钮；
+        4. 清空电脑共享文件夹与仪器内部文件夹；
+        5. 按预设的 Span 列表依次完成多次线宽测量；
+        6. 控制信号发生器输出 0.1 Hz、0 Vpp、1 Vdc 的正弦波，并在 Span=500 kHz 下追加一次额外测试；
+        7. 收集所有截图路径，测试结束后弹出结果选择窗口供用户预览与手动保存；
+        8. 无论成功或异常，最终恢复按钮状态并关闭仪器连接。
+
+        参数：
+            无
+
+        返回：
+            无
+        """
         if self.worker and self.worker.is_alive():
             messagebox.showinfo('提示', '测试已在进行中')
             return
@@ -341,6 +603,20 @@ class LineWidth_FSV3004_GUI:
         self.stop_flag.clear()
         
         def task():
+            """
+            后台线程任务：执行完整的线宽自动化测试流程。
+
+            步骤概览：
+            1. 清空电脑共享文件夹与仪器内部文件夹；
+            2. 按预设 Span 列表（100/200/500/1000/2000 kHz）依次配置频谱仪并测量；
+            3. 控制信号发生器输出 0.1 Hz、0 Vpp、1 Vdc 正弦波，追加 Span=500 kHz 的额外测试；
+            4. 收集所有截图路径，测试结束后弹出结果选择窗口供用户预览与手动保存；
+            5. 无论成功或异常，最终恢复按钮状态并关闭仪器连接。
+
+            异常处理：
+            - 任意步骤失败均记录日志并弹出错误提示；
+            - 用户点击“停止”后立即终止后续操作。
+            """
             try:
                 self.log("[开始] 线宽测试开始")
                 
@@ -555,14 +831,36 @@ class LineWidth_FSV3004_GUI:
         self.worker.start()
     
     def stop_measurement(self):
-        """停止测量"""
+        """
+        立即停止当前正在进行的测量任务。
+
+        通过调用测试实例的 stop() 方法以及设置本类的 stop_flag 事件，
+        通知后台线程立即终止后续测量步骤，并在日志中记录停止原因。
+
+        参数:
+            无
+
+        返回:
+            无
+        """
         if self.tester:
             self.tester.stop()
         self.stop_flag.set()
         self.log("[停止] 用户请求停止测量")
     
     def show_results_selection(self, all_results):
-        """显示测试结果选择界面，让用户选择需要查看的截图"""
+        """
+        弹出测试结果选择窗口，供用户预览并手动保存所有测试截图。
+
+        参数:
+            all_results (list[dict]): 包含所有测试结果的列表，每个元素为字典，需包含：
+                - 'image_path' (str): 截图文件的完整路径
+                - 'span_value' (str): 对应的 Span 值
+                - 'file_name' (str): 截图文件名
+
+        返回:
+            无
+        """
         win = tk.Toplevel(self.root)
         win.title("测试结果选择")
         win.transient(self.root)
@@ -613,6 +911,15 @@ class LineWidth_FSV3004_GUI:
         
         # 显示当前选中的图片
         def show_selected_image(event=None):
+            """
+            在右侧图片预览区显示当前选中的测试结果截图。
+
+            参数:
+                event (tk.Event, optional): Listbox 选择事件对象，可省略。
+
+            返回:
+                无
+            """
             selected_index = listbox.curselection()
             if not selected_index:
                 return
@@ -640,6 +947,17 @@ class LineWidth_FSV3004_GUI:
         
         # 保存当前选中的图片
         def save_selected_image():
+            """
+            保存当前在图片预览区显示的图片到用户指定路径。
+            功能：
+            1. 检查是否已加载图片；
+            2. 弹出文件保存对话框，默认格式为 PNG；
+            3. 将图片保存到用户选择的路径，并给出成功或失败提示。
+            参数:
+                无
+            返回:
+                无
+            """
             if not hasattr(img_label, 'current_img'):
                 messagebox.showwarning("提示", "请先选择要保存的图片")
                 return
@@ -669,7 +987,16 @@ class LineWidth_FSV3004_GUI:
         show_selected_image()
     
     def show_image_popup(self, image_path, span_value=None):
-        """显示测量结果截图，单张显示，支持手动保存"""
+        """
+        弹出独立窗口，用于预览并手动保存单张测试截图。
+
+        参数:
+            image_path (str): 待显示图片的完整文件路径。
+            span_value (str, optional): 当前截图对应的 Span 值，用于窗口标题提示；可省略。
+
+        返回:
+            无
+        """
         win = tk.Toplevel(self.root)
         
         # 设置窗口标题，显示当前Span值
@@ -704,6 +1031,20 @@ class LineWidth_FSV3004_GUI:
         
         # 保存图片按钮
         def _save_img():
+            """
+            弹出文件保存对话框，将当前窗口显示的图片保存到用户指定路径。
+            
+            功能：
+            1. 弹出保存对话框，默认格式为 PNG；
+            2. 若用户确认保存，则将图片写入指定路径；
+            3. 保存成功或失败均给出对应提示。
+            
+            参数:
+                无
+                
+            返回:
+                无
+            """
             save_path = filedialog.asksaveasfilename(defaultextension=".png",
                                                      filetypes=[("PNG 文件", "*.png"), ("所有文件", "*.*")],
                                                      title="保存图片")
@@ -716,6 +1057,15 @@ class LineWidth_FSV3004_GUI:
         
         # 关闭窗口按钮
         def _close_window():
+            """
+            关闭当前弹出的图片预览窗口。
+            
+            参数:
+                无
+                
+            返回:
+                无
+            """
             win.destroy()
         
         # 添加保存按钮
@@ -732,7 +1082,15 @@ class LineWidth_FSV3004_GUI:
         win.protocol("WM_DELETE_WINDOW", _close_window)
     
     def run(self):
-        """运行GUI"""
+        """
+        启动 GUI 主事件循环，使窗口进入可交互状态并等待用户操作。
+
+        参数:
+            无
+
+        返回:
+            无
+        """
         self.root.mainloop()
 
 # ============ 程序入口 ============

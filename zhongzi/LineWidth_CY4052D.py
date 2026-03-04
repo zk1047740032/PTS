@@ -25,11 +25,23 @@ else:
 # ============ 信号发生器控制类 ============
 class SignalGenerator:
     def __init__(self, log_callback=None) -> None:
+        """
+        信号发生器控制类初始化
+        
+        Args:
+            log_callback: 日志回调函数，用于记录操作日志
+        """
         self.rm = None
         self.inst = None
         self.log = log_callback or (lambda msg: None)
 
     def connect(self, ip_address):
+        """
+        连接到信号发生器
+        
+        Args:
+            ip_address: 信号发生器的IP地址
+        """
         self.rm = pyvisa.ResourceManager()
         self.inst = self.rm.open_resource(f'TCPIP0::{ip_address}::5025::SOCKET')
         self.inst.timeout = 10000
@@ -38,6 +50,18 @@ class SignalGenerator:
         self.log(f"[信号源] 已连接到信号发生器")
 
     def configure(self, waveform="SIN", freq=0.1, volt=0, offset=1):
+        """
+        配置信号发生器参数
+        
+        Args:
+            waveform: 波形类型，默认为"SIN"（正弦波）
+            freq: 频率，单位Hz，默认为0.1
+            volt: 幅值，单位Vpp，默认为0
+            offset: 偏移，单位Vdc，默认为1
+            
+        Returns:
+            bool: 配置是否成功
+        """
         if not self.inst:
             self.log("[信号源] 未连接到信号发生器")
             return False
@@ -64,6 +88,15 @@ class SignalGenerator:
             return False
 
     def set_output(self, on=True):
+        """
+        设置信号发生器输出状态
+        
+        Args:
+            on: 是否打开输出，默认为True
+            
+        Returns:
+            bool: 设置是否成功
+        """
         if not self.inst:
             self.log("[信号源] 未连接到信号发生器")
             return False
@@ -80,6 +113,9 @@ class SignalGenerator:
             return False
 
     def close(self):
+        """
+        关闭信号发生器连接
+        """
         if self.inst:
             try:
                 self.inst.close()
@@ -95,17 +131,40 @@ class SignalGenerator:
 # ============ 仪器控制类 ============
 class LinewidthTester:
     def __init__(self, log_callback=None) -> None:
+        """
+        线宽测试仪控制类初始化
+        
+        Args:
+            log_callback: 日志回调函数，用于记录操作日志
+        """
         self.rm = pyvisa.ResourceManager()
         self.inst = None
         self.log = log_callback or (lambda msg: None)
         self.stop_flag = threading.Event()
 
     def connect(self, ip_address):
+        """
+        连接到频谱仪
+        
+        Args:
+            ip_address: 频谱仪的IP地址
+        """
         self.inst = self.rm.open_resource(f'TCPIP0::{ip_address}::inst0::INSTR')
         self.inst.timeout = 10000
         self.log("已连接到频谱仪")
 
     def configure(self, ref_level, M1_position, center_freq, span, rbw, n_db_down):
+        """
+        配置频谱仪参数
+        
+        Args:
+            ref_level: 参考电平，单位mV
+            M1_position: M1位置，单位MHz
+            center_freq: 中心频率，单位MHz
+            span: 扫描跨度，单位kHz
+            rbw: 分辨率带宽，单位Hz
+            n_db_down: N dB down值
+        """
         self.inst.write("INIT:CONT OFF")  # 关闭连续扫描
         # 添加单位：中心频率使用MHZ，带宽使用MHZ，RBW使用HZ
 
@@ -123,6 +182,12 @@ class LinewidthTester:
         self.log("完成参数设置")
 
     def measure(self):
+        """
+        执行测量
+        
+        Returns:
+            bool: 测量是否成功
+        """
         if self.stop_flag.is_set():
             return False
         self.inst.write("INIT;*WAI")  # 开始测量并等待完成
@@ -145,6 +210,17 @@ class LinewidthTester:
         return True
 
     def save_data(self, instr_image_path, instr_trace_csv, pc_shared_folder):
+        """
+        保存测量数据和截图
+        
+        Args:
+            instr_image_path: 仪器图片路径
+            instr_trace_csv: 仪器数据路径
+            pc_shared_folder: 电脑共享文件夹路径
+            
+        Returns:
+            str: 保存的图片路径，或False如果保存失败
+        """
         if self.stop_flag.is_set():
             return False
         
@@ -249,17 +325,29 @@ class LinewidthTester:
             raise
 
     def close(self):
+        """
+        关闭频谱仪连接
+        """
         if self.inst:
             self.inst.close()
             self.log("连接已关闭")
 
     def stop(self):
+        """
+        停止测量
+        """
         self.stop_flag.set()
         self.log("测量已停止")
 
 # ============ GUI 控制类 ============
 class LineWidth_CY4052D_GUI:
     def __init__(self, parent=None):
+        """
+        线宽测试GUI类初始化
+        
+        Args:
+            parent: 父窗口，默认为None（独立模式）
+        """
         self.parent = parent
         
         # --- 核心修改：如果是集成模式，直接使用父控件作为 root ---
@@ -296,6 +384,14 @@ class LineWidth_CY4052D_GUI:
         self._build_ui()
     
     def set_center(self, window, width, height):
+        """
+        设置窗口居中显示
+        
+        Args:
+            window: 窗口对象
+            width: 窗口宽度
+            height: 窗口高度
+        """
         sw = window.winfo_screenwidth()
         sh = window.winfo_screenheight()
         x = (sw - width) // 2
@@ -303,6 +399,9 @@ class LineWidth_CY4052D_GUI:
         window.geometry(f"{width}x{height}+{x}+{y}")
     
     def _build_ui(self):
+        """
+        构建用户界面
+        """
         # 创建主框架，分为左右两部分
         main_frame = tk.Frame(self.root)
         main_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
@@ -372,22 +471,38 @@ class LineWidth_CY4052D_GUI:
         self.log_box.pack(fill=tk.BOTH, expand=True)
         
     def log(self, msg):
+        """
+        记录日志
+        
+        Args:
+            msg: 日志信息
+        """
         t = time.strftime('[%H:%M:%S]')
         self.root.after(0, lambda: self._safe_log_append(f"{t} {msg}\n"))
     
     def _safe_log_append(self, text):
+        """
+        安全地向日志框添加文本
+        
+        Args:
+            text: 要添加的文本
+        """
         self.log_box.insert(tk.END, text)
         self.log_box.see(tk.END)
     
     def _save_params(self):
-        """保存当前输入的参数"""
+        """
+        保存当前输入的参数
+        """
         for k, e in self.entries.items():
             v = e.get()
             self.params[k] = v
         self.log('[参数] 已更新')
     
     def start_measurement(self):
-        """开始测量"""
+        """
+        开始测量
+        """
         if self.worker and self.worker.is_alive():
             messagebox.showinfo('提示', '测试已在进行中')
             return
@@ -616,14 +731,21 @@ class LineWidth_CY4052D_GUI:
         self.worker.start()
     
     def stop_measurement(self):
-        """停止测量"""
+        """
+        停止测量
+        """
         if self.tester:
             self.tester.stop()
         self.stop_flag.set()
         self.log("[停止] 用户请求停止测量")
     
     def show_results_selection(self, all_results):
-        """显示测试结果选择界面，让用户选择需要查看的截图"""
+        """
+        显示测试结果选择界面，让用户选择需要查看的截图
+        
+        Args:
+            all_results: 测试结果列表，每个元素包含image_path、span_value和file_name
+        """
         win = tk.Toplevel(self.root)
         win.title("测试结果选择")
         win.transient(self.root)
@@ -730,7 +852,13 @@ class LineWidth_CY4052D_GUI:
         show_selected_image()
     
     def show_image_popup(self, image_path, span_value=None):
-        """显示测量结果截图，单张显示，支持手动保存"""
+        """
+        显示测量结果截图，单张显示，支持手动保存
+        
+        Args:
+            image_path: 图片路径
+            span_value: Span值，用于窗口标题
+        """
         win = tk.Toplevel(self.root)
         
         # 设置窗口标题，显示当前Span值
@@ -793,7 +921,9 @@ class LineWidth_CY4052D_GUI:
         win.protocol("WM_DELETE_WINDOW", _close_window)
     
     def run(self):
-        """运行GUI"""
+        """
+        运行GUI
+        """
         self.root.mainloop()
 
 # ============ 程序入口 ============

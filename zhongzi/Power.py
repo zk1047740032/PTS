@@ -26,6 +26,18 @@ else:
 
 class PowerMeterController:
     def __init__(self, resource: str, log_func=print, timeout_ms: int = 5000):
+        """
+        Initialize a PowerMeterController.
+
+        Args:
+            resource (str): VISA resource string identifying the power meter (e.g., 'USB::0x1234::0x5678::INSTR').
+            log_func (callable): Logging function used to report status and errors. Defaults to print.
+            timeout_ms (int): Timeout in milliseconds for VISA operations. Defaults to 5000.
+
+        The controller creates a PyVISA ResourceManager and will open the
+        specified instrument resource when :meth:`connect` is called.  The
+        instance is stored in ``self.inst`` for subsequent commands.
+        """
         self.rm = pyvisa.ResourceManager()
         self.inst = None
         self.resource = resource

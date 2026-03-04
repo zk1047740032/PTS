@@ -167,17 +167,6 @@ class SpectrumSNR:
 
         return snr, wl, power
 
-    # 保存数据
-    def save_data(self, snr, filename_base="spectrum_snr"):
-        os.makedirs(self.params["OUTPUT_DIR"], exist_ok=True)
-        csv_path = os.path.join(self.params["OUTPUT_DIR"], f"{filename_base}.csv")
-        with open(csv_path, mode="w", newline="") as f:
-            writer = csv.writer(f)
-            writer.writerow(["SNR(dB)"])
-            writer.writerow([snr])
-        self.log(f"[保存] 结果已保存到：{csv_path}")
-        return csv_path
-
     # 保存截图
     def save_screenshot(self, save_path=None, snr_value=None):
         try:
@@ -235,8 +224,6 @@ class SpectrumSNR:
                 writer.writerow([x, y])
         self.log(f"[保存] 光谱曲线已保存到：{csv_path}")
         return csv_path
-
-
 
     def close(self):
         try:
@@ -344,6 +331,21 @@ class SpectrumSNRGUI:
                 self.params[k] = v
         self.log(f"[参数] 中心波长：{self.params['CENTER']}nm | 扫描范围：{self.params['SPAN']}nm")
 
+    def clear_dir(self, OUTPUT_DIR):
+        dir = OUTPUT_DIR
+        if os.path.exists(dir):
+            for f in os.listdir(dir):
+                fp = os.path.join(dir, f)
+                try:
+                    if os.path.isfile(fp) or os.path.islink(fp):
+                        os.remove(fp)
+                    elif os.path.isdir(fp):
+                        import shutil
+                        shutil.rmtree(fp)
+                except Exception as e:
+                    self.log(f"[警告] 删除 {fp} 失败: {e}")
+        self.log("[主机] 已清空文件夹")
+
     # --- 修改 2: 点击按钮只启动线程 ---
     def start_test(self):
         # 1. 禁用按钮，防止重复点击
@@ -360,9 +362,9 @@ class SpectrumSNRGUI:
         osa = SpectrumSNR(self.params, self.log) # 注意：这里的 log 已经是线程安全的了
         try:
             osa.connect_instrument()
+            self.clear_dir(self.params["OUTPUT_DIR"])
             osa.configure_osa()
             snr, wl, power = osa.measure_snr()
-            osa.save_data(snr)
             osa.save_curve(wl, power) 
             screenshot = osa.save_screenshot(snr_value=snr)
             
