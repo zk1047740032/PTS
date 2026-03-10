@@ -23,11 +23,6 @@ try:
 except Exception:
     PYW_AVAILABLE = False
 
-
-from pywinauto.application import Application
-import time
-
-
 class LaserController:
     def __init__(self, exe_path, window_title=".*Preci-Seed.*", log_func=print):
         self.exe_path = exe_path
@@ -37,8 +32,6 @@ class LaserController:
         self.log = log_func
 
     def start_or_connect(self, timeout=15.0):
-        if not PYW_AVAILABLE:
-            raise RuntimeError("未安装 pywinauto，请先 pip install pywinauto")
         try:
             # 优先连接已运行实例
             self.app = Application(backend="uia").connect(title_re=self.window_title, timeout=5)

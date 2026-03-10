@@ -449,6 +449,17 @@ class RinAnalyzer:
             try:
                 fig.savefig(auto_path, dpi=300, bbox_inches='tight')
                 self.log(f"[保存] 自动保存Rin图片: {auto_path}")
+                
+                # 保存图二y轴最大值到CSV文件
+                try:
+                    max_value_path = os.path.join(save_dir, "rin_figure2_max.csv")
+                    with open(max_value_path, "w", newline="", encoding="utf-8") as f:
+                        writer = csv.writer(f)
+                        writer.writerow([f"{y2_max:.3f}"])
+                    self.log(f"[保存] 自动保存图二y轴最大值: {max_value_path}")
+                except Exception as e:
+                    self.log(f"[保存] 自动保存图二y轴最大值失败: {e}")
+                    
             except Exception as e:
                 self.log(f"[保存] 自动保存Rin图片失败: {e}")
         except Exception as e:

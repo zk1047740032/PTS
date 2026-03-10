@@ -167,6 +167,17 @@ class SpectrumSNR:
 
         return snr, wl, power
 
+    # 保存数据
+    def save_data(self, snr, filename_base="spectrum_snr"):
+        os.makedirs(self.params["OUTPUT_DIR"], exist_ok=True)
+        csv_path = os.path.join(self.params["OUTPUT_DIR"], f"{filename_base}.csv")
+        with open(csv_path, mode="w", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow(["SNR(dB)"])
+            writer.writerow([snr])
+        self.log(f"[保存] 结果已保存到：{csv_path}")
+        return csv_path
+
     # 保存截图
     def save_screenshot(self, save_path=None, snr_value=None):
         try:
@@ -365,6 +376,7 @@ class SpectrumSNRGUI:
             self.clear_dir(self.params["OUTPUT_DIR"])
             osa.configure_osa()
             snr, wl, power = osa.measure_snr()
+            osa.save_data(snr)
             osa.save_curve(wl, power) 
             screenshot = osa.save_screenshot(snr_value=snr)
             

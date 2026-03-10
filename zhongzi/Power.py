@@ -1,3 +1,6 @@
+"""
+2026.3.10：添加了读取上位机软件的类，之后要用再写
+"""
 from __future__ import annotations
 
 import os
@@ -9,6 +12,14 @@ import ctypes
 import pyvisa
 import tkinter as tk
 from tkinter import filedialog
+
+# ===============  上位机控制（pywinauto）  ===============
+try:
+    from pywinauto.application import Application
+    from pywinauto import timings
+    PYW_AVAILABLE = True
+except Exception:
+    PYW_AVAILABLE = False
 
 # 启用DPI感知，解决高DPI屏幕下界面模糊问题
 if os.name == 'nt':
@@ -23,6 +34,69 @@ if os.name == 'nt':
         scaling_factor = 1.0
 else:
     scaling_factor = 1.0
+
+class LaserController:
+    def __init__(self, exe_path, window_title, log_func=print):
+        self.exe_path = exe_path
+        self.window_title = window_title
+        self.app = None
+        self.win = None
+        self.log = log_func
+    
+    def start_or_connect(self, timeout=15.0):
+        try:
+            self.app = Application(backend='uia').connect(title_re=self.window_title, timeout=5)
+            self.win = self.app.window(title_re=self.window_title)
+            self.win.set_focus()
+            self.log("[上位机] 已连接到运行中的窗口")
+        except Exception:
+            self.log("[上位机] 未找到运行实例，尝试启动…")
+            self.app = Application(backend="uia").start(cmd_line=f'"{self.exe_path}"')
+            self.app.connect(title_re=self.window_title, timeout=timeout)
+            self.win = self.app.window(title_re=self.window_title)
+            self.win.wait("ready", timeout=timeout)
+            self.win.set_focus()
+            self.log("[上位机] 已启动并连接")
+        timings.wait_until_passes(5, 0.5, lambda: self.win.exists() and self.win.is_visible())
+        return True
+
+    # ================= 电流控制 =================
+    def get_current_mA(self):
+        """
+        读取当前电流
+        """
+        try:
+            edit = self.win.child_window(auto_id="Label_current", control_type="Text")
+            txt = edit.window_text()
+            return float(txt)
+        except Exception as e:
+            self.log(f"[错误] 读取电流失败: {e}")
+            return None
+
+    def set_current_mA(self):
+        """
+        设置电流
+        """
+        try:
+            edit = self.win.child_window(auto_id="textBox_Current", control_type="Edit")
+            edit.set_edit_text(f"{val_mA:.2f}")
+            btn = self.win.child_window(title="Set", control_type="Button")
+            btn.click()
+            self.log(f"[上位机] 已设置电流: {val_mA:.2f} mA")
+            time.sleep(0.5)
+        except Exception as e:
+            self.log(f"[错误] 设置电流失败：{e}")
+
+    def get_power(self):
+        """
+        读PD值（Power）
+        """
+        try:
+            edit = self.win.child_window(auto_id="label_Power", control_type="Text")
+            txt = edit.window_text()
+            return float(txt)
+        except Exception as e:
+            self.log(f"[错误] 读取功率失败：{e}")
 
 class PowerMeterController:
     def __init__(self, resource: str, log_func=print, timeout_ms: int = 5000):
@@ -122,12 +196,12 @@ class PowerCollector:
             
             os.makedirs(out_dir, exist_ok=True)
             
-            csv_filename = os.path.join(out_dir, f"power_{time.strftime('%Y%m%d_%H%M%S')}.csv")
+            csv_filename = os.path.join(out_dir, f"power.csv")
             
             with open(csv_filename, "w", newline="", encoding="utf-8") as f:
                 writer = csv.writer(f)
-                writer.writerow(["Timestamp", "Power_W", "Power_mW"])
-                writer.writerow([timestamp, f"{power_w:.9f}", f"{power_mw:.3f}"])
+                # writer.writerow(["Power_mW"])
+                writer.writerow([f"{power_mw:.2f}"])
             
             self.log(f"[Collector] 数据已保存到: {csv_filename}")
             return True

@@ -5,6 +5,7 @@ import os
 import sys
 import ctypes
 import threading
+import csv
 import time
 import traceback
 import multiprocessing
@@ -27,8 +28,32 @@ else:
 # 【修改点 1】：函数签名增加 cmd_queue (命令队列)
 def run_module_process(module_name, start_method, msg_queue, cmd_queue):
     """
-    子进程执行函数
-    cmd_queue: 用于接收主进程发来的指令（如 "START"）
+        运行指定模块的进程，负责初始化 GUI 界面并处理测试命令
+    
+    该函数根据模块名称导入对应的 GUI 类，创建实例，并监听命令队列以执行测试。
+    同时通过消息队列向主进程报告模块状态。
+    
+    参数:
+        module_name (str): 模块名称，用于确定要导入的 GUI 类
+        start_method (str): 启动测试的方法名称，当收到 START 命令时会调用该方法
+        msg_queue (Queue): 消息队列，用于向主进程发送状态消息
+        cmd_queue (Queue): 命令队列，用于接收主进程发送的命令（如 START）
+    
+    执行流程:
+        1. 根据模块名称导入对应的 GUI 类
+        2. 向消息队列发送模块启动状态
+        3. 创建 GUI 实例并设置窗口标题
+        4. 定义内部函数 trigger_test() 用于执行测试
+        5. 定义内部函数 check_command_queue() 用于监听命令队列
+        6. 启动命令队列监听循环
+        7. 运行 GUI 主循环
+        8. 向消息队列发送模块完成状态
+    
+    异常处理:
+        - 捕获导入模块失败的异常
+        - 捕获执行测试过程中的异常
+        - 捕获进程运行过程中的异常
+        - 所有异常都会通过消息队列向主进程报告
     """
     try:
         gui_class = None
@@ -67,7 +92,19 @@ def run_module_process(module_name, start_method, msg_queue, cmd_queue):
 
         # === 定义执行测试的内部函数 ===
         def trigger_test():
-            """触发测试的具体逻辑"""
+            """
+            触发测试的具体逻辑
+            
+            功能:
+                - 检查是否存在指定的启动方法
+                - 发送测试开始的消息到消息队列
+                - 更新应用窗口标题为运行中状态
+                - 执行测试方法
+                - 处理测试过程中的异常
+            
+            异常处理:
+                - 捕获执行测试过程中的异常，并通过消息队列上报错误信息
+            """
             try:
                 if start_method and hasattr(app_instance, start_method):
                     msg_queue.put((module_name, "running", f"{module_name} 测试开始..."))
@@ -84,6 +121,9 @@ def run_module_process(module_name, start_method, msg_queue, cmd_queue):
 
         # === 【修改点 2】：监听命令队列 ===
         def check_command_queue():
+            """
+            监听命令队列
+            """
             try:
                 # 非阻塞获取命令
                 while not cmd_queue.empty():
@@ -145,7 +185,54 @@ MODULE_GROUPS = {
 }
 
 class IntegratedPlatform:
+    """
+    集成测试平台主类
+    
+    主要功能和用途:
+        - 提供统一的测试项目选择界面，支持多模块并行测试
+        - 管理各个测试模块的进程生命周期
+        - 监控测试执行状态并记录日志
+        - 提供一键测试功能，实现自动化测试流程
+        - 支持测试项的全选/清空操作
+    
+    核心设计理念:
+        - 采用多进程架构，每个测试模块运行在独立进程中，提高系统稳定性
+        - 使用队列进行进程间通信，实现命令下发和状态上报
+        - 模块化设计，通过配置文件定义测试模块，便于扩展
+        - 响应式UI设计，提供直观的操作界面和实时状态反馈
+    
+    关键特性:
+        - 支持多模块并行测试，提高测试效率
+        - 实时日志记录和状态监控
+        - 自动清理资源，确保进程安全退出
+        - 容错处理，当命令队列异常时自动重启进程
+        - 支持测试项的双击快速打开功能
+    
+    使用场景:
+        - 实验室环境下的多设备并行测试
+        - 自动化测试流程中的集中控制
+        - 需要实时监控测试状态的场景
+        - 对测试结果有详细记录需求的场合
+    
+    限制条件:
+        - 依赖Tkinter GUI库，仅支持桌面环境
+        - 测试模块必须符合特定的接口规范
+        - 进程间通信依赖multiprocessing.Queue，受系统资源限制
+        - 并发测试数量受系统硬件资源限制
+    
+    与其他类或模块的主要交互关系:
+        - 与各测试模块的GUI类交互，通过进程启动和命令队列控制测试执行
+        - 与user_guide模块交互，显示操作说明文档
+        - 与run_module_process函数交互，启动和管理测试进程
+        - 通过MODULE_MAP和MODULE_GROUPS配置定义测试模块信息
+    """
     def __init__(self, root):
+        """
+        初始化集成测试平台
+        
+        参数:
+            root (tk.Tk): Tkinter 根窗口对象
+        """
         self.root = root
         self.root.title("PTS - 集成测试平台")
         self.root.geometry("1100x850") # 稍微加大一点
@@ -155,8 +242,8 @@ class IntegratedPlatform:
             pass
 
         self.check_vars = {}     
-        self.processes = {}       # {name: Process}
-        self.cmd_queues = {}      # 【修改点 3】新增：存储每个进程的命令队列 {name: Queue}
+        self.processes = {}
+        self.cmd_queues = {}
         self.msg_queue = multiprocessing.Queue() 
 
         self.setup_ui()
@@ -165,11 +252,17 @@ class IntegratedPlatform:
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
 
     def setup_ui(self):
+        """
+        设置用户界面
+        
+        该方法创建并配置整个测试平台的用户界面，包括：
+        - 左侧控制面板，包含测试项目选择、全选/清空按钮和标签页
+        - 右侧日志监控区域，包含进度条、状态标签和日志树视图
+        """
         self.style = ttk.Style()
         self.style.theme_use('vista')
         
         # 【修改点 4】：修复 Treeview 行高问题
-        # 30 是经验值，适配大多数缩放。如果还觉得挤，可以设为 35 或 40
         self.style.configure("Treeview", rowheight=30, font=("Microsoft YaHei", 10))
         self.style.configure("Treeview.Heading", font=("Microsoft YaHei", 10, "bold"))
         
@@ -182,7 +275,7 @@ class IntegratedPlatform:
         main_frame.pack(fill=tk.BOTH, expand=True)
 
         # === 左侧：控制面板 ===
-        control_panel = tk.Frame(main_frame, bg="#ffffff", width=320)
+        control_panel = tk.Frame(main_frame, bg="#ffffff", width=340)
         control_panel.pack(side=tk.LEFT, fill=tk.Y, padx=0, pady=0)
         control_panel.pack_propagate(False)
 
@@ -255,13 +348,19 @@ class IntegratedPlatform:
         
         # 打开按钮
         self.btn_open = tk.Button(bottom_frame, text="打开", 
-                                bg="#1E96E6", fg="white", font=("微软雅黑", 12, "bold"),
+                                bg="#1E96E6", fg="white", font=("微软雅黑", 9, "bold"),
                                 command=self.open_selected_windows)
         self.btn_open.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=2)
+
+        # 生成报告
+        self.btn_report = tk.Button(bottom_frame, text="生成报告", 
+                                    bg="#FF9900", fg="white", font=("微软雅黑", 9, "bold"),
+                                    command=self.on_generate_report)
+        self.btn_report.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=2)
         
         # 一键测试按钮
-        self.btn_run = tk.Button(bottom_frame, text="▶ 一键测试", 
-                                bg="#02BC08", fg="white", font=("微软雅黑", 12, "bold"),
+        self.btn_run = tk.Button(bottom_frame, text="一键测试", 
+                                bg="#02BC08", fg="white", font=("微软雅黑", 9, "bold"),
                                 command=self.run_selected_tests)
         self.btn_run.pack(side=tk.RIGHT, fill=tk.X, expand=True, padx=2)
 
@@ -320,6 +419,15 @@ class IntegratedPlatform:
     # ================= 逻辑控制 =================
 
     def log(self, module, msg, level="info"):
+        """
+        记录日志信息
+        
+        参数:
+            module (str): 模块名称
+            msg (str): 日志消息内容
+            level (str, optional): 日志级别，默认为 "info"
+                可选值: "info", "error", "completed", "running"
+        """
         timestamp = time.strftime("%H:%M:%S")
         tags = (level,)
         self.log_tree.insert("", "end", values=(timestamp, module, msg), tags=tags)
@@ -333,7 +441,16 @@ class IntegratedPlatform:
             self.log_tree.tag_configure("running", foreground="#0000FF")
 
     def on_test_item_checked(self, module_name):
-        """测试项勾选状态变化时的处理函数：仅记录状态，不自动打开窗口"""
+        """
+        测试项勾选状态变化时的处理函数
+        
+        参数:
+            module_name (str): 模块名称
+        
+        功能:
+            - 当测试项被取消勾选时，关闭对应进程并清理资源
+            - 仅记录状态，不自动打开窗口
+        """
         is_checked = self.check_vars[module_name].get()
         
         if not is_checked:
@@ -348,7 +465,20 @@ class IntegratedPlatform:
                 if module_name in self.cmd_queues: del self.cmd_queues[module_name]
     
     def on_test_item_double_click(self, event, module_name, widget):
-        """测试项双击时的处理函数：勾选并打开对应窗口，避免第二次点击取消勾选"""
+        """
+        测试项双击时的处理函数
+        
+        参数:
+            event: Tkinter 事件对象
+            module_name (str): 模块名称
+            widget: Tkinter 控件对象
+        
+        功能:
+            - 阻止事件传播到默认的单击处理
+            - 确保测试项被勾选
+            - 打开对应窗口（如果进程不存在或已死亡）
+            - 延迟重新启用控件，确保双击事件完全处理完成
+        """
         # 阻止事件传播到默认的单击处理
         event.widget.configure(state="disabled")  # 临时禁用控件，防止第二次点击
         
@@ -363,13 +493,25 @@ class IntegratedPlatform:
         self.root.after(100, lambda w=widget: w.configure(state="normal"))
     
     def clear_logs(self):
-        """清空日志区域"""
+        """
+        清空日志区域
+        
+        功能:
+            - 删除日志树视图中的所有日志条目
+        """
         # 删除所有日志条目
         for item in self.log_tree.get_children():
             self.log_tree.delete(item)
     
     def show_help(self):
-        """显示操作说明文档"""
+        """
+        显示操作说明文档
+        
+        功能:
+            - 创建一个新的窗口显示操作说明文档
+            - 从 user_guide 模块导入 USER_GUIDE 内容并显示
+            - 提供滚动条和关闭按钮
+        """
         # 创建说明文档窗口
         help_window = tk.Toplevel(self.root)
         help_window.title("操作说明")
@@ -399,7 +541,20 @@ class IntegratedPlatform:
         close_button.pack(pady=10)
 
     def start_module_process(self, name, auto_start=False):
-        """封装启动进程的逻辑"""
+        """
+        启动模块进程
+        
+        参数:
+            name (str): 模块名称
+            auto_start (bool, optional): 是否自动开始测试，默认为 False
+        
+        功能:
+            - 根据模块名称获取启动方法
+            - 创建专属命令队列
+            - 启动子进程
+            - 如果 auto_start 为 True，立即发送开始测试指令
+            - 记录进程启动状态
+        """
         start_method = MODULE_MAP[name]["start_method"]
         
         # 创建专属命令队列
@@ -427,7 +582,17 @@ class IntegratedPlatform:
             self.log(name, f"窗口已打开，等待测试指令 (PID: {p.pid})")
 
     def open_selected_windows(self):
-        """打开所有已勾选测试项的窗口"""
+        """
+        打开所有已勾选测试项的窗口
+        
+        功能:
+            - 获取所有已勾选的测试项
+            - 如果没有勾选任何测试项，显示警告
+            - 禁用打开按钮并显示正在打开状态
+            - 为每个勾选的测试项启动进程（如果进程不存在或已死亡）
+            - 稍作延时，避免瞬间并发过高冲击
+            - 恢复按钮状态
+        """
         selected = [name for name, var in self.check_vars.items() if var.get()]
         if not selected:
             messagebox.showwarning("提示", "请先勾选测试项")
@@ -448,7 +613,20 @@ class IntegratedPlatform:
         self.root.after(1000, lambda: self.btn_open.config(state="normal", text="打开"))
 
     def run_selected_tests(self):
-        """并发启动逻辑"""
+        """
+        并发启动测试
+        
+        功能:
+            - 获取所有已勾选的测试项
+            - 如果没有勾选任何测试项，显示警告
+            - 禁用一键测试按钮并显示正在下发指令状态
+            - 对于每个勾选的测试项：
+                - 如果窗口已打开（进程存活），通过命令队列发送开始测试指令
+                - 如果找不到命令队列，尝试重启进程
+                - 如果窗口未打开，启动进程并自动开始测试
+            - 稍作延时，避免瞬间并发过高冲击
+            - 恢复按钮状态
+        """
         selected = [name for name, var in self.check_vars.items() if var.get()]
         if not selected:
             messagebox.showwarning("提示", "请先勾选测试项")
@@ -481,7 +659,16 @@ class IntegratedPlatform:
         self.root.after(1000, lambda: self.btn_run.config(state="normal", text="▶ 一键测试"))
 
     def process_queue_messages(self):
-        """定时处理消息"""
+        """
+        定时处理消息队列中的消息
+        
+        功能:
+            - 处理消息队列中的所有消息
+            - 根据消息类型记录不同级别的日志
+            - 当收到 completed 消息时，清理进程和命令队列引用，并取消对应测试项的勾选
+            - 根据当前活跃进程数更新状态标签和进度条
+            - 每 200ms 调用一次自己，实现定时处理
+        """
         try:
             while not self.msg_queue.empty():
                 module, type_, msg = self.msg_queue.get_nowait()
@@ -520,7 +707,15 @@ class IntegratedPlatform:
 
     def get_current_module_list(self):
         """
-        辅助函数：根据当前激活的页签（包括嵌套的子页签），获取对应的模块名称列表。
+        获取当前激活页签对应的模块名称列表
+        
+        返回:
+            list: 当前激活页签对应的模块名称列表
+        
+        功能:
+            - 根据当前激活的页签（包括嵌套的子页签），获取对应的模块名称列表
+            - 处理嵌套结构（如 "种子" 分组下的通道）和扁平结构（如 "器件" 分组）
+            - 捕获异常并返回空列表
         """
         try:
             # 1. 获取一级页签 (如 "种子" 或 "器件")
@@ -565,7 +760,14 @@ class IntegratedPlatform:
             return []
 
     def select_all(self):
-        """全选当前可见列表中的模块"""
+        """
+        全选当前可见列表中的模块
+        
+        功能:
+            - 获取当前激活页签对应的模块列表
+            - 勾选所有模块的复选框
+            - 仅设置状态，不触发 on_test_item_checked，避免全选时误触发不需要的逻辑
+        """
         target_modules = self.get_current_module_list()
         
         for name in target_modules:
@@ -576,7 +778,15 @@ class IntegratedPlatform:
                 # self.on_test_item_checked(name)
 
     def deselect_all(self):
-        """清空当前可见列表中的模块"""
+        """
+        清空当前可见列表中的模块
+        
+        功能:
+            - 获取当前激活页签对应的模块列表
+            - 取消勾选所有模块的复选框
+            - 如果模块当前是勾选状态，取消勾选并触发 on_test_item_checked 回调
+            - 通过回调关闭正在运行的进程
+        """
         target_modules = self.get_current_module_list()
         
         for name in target_modules:
@@ -587,7 +797,88 @@ class IntegratedPlatform:
                     # 取消勾选必须触发回调，因为需要通过它来关闭正在运行的进程
                     self.on_test_item_checked(name)
 
+    def on_generate_report(self):
+        """点击生成报告的逻辑"""
+        
+        # 组装数据字典 (键名必须与 Word 模板中的 {{ 变量名 }} 完全一致)
+        report_data = {
+            # 项目数据
+            "text_date": time.strftime("%Y/%m/%d"),
+
+            # Fig.1 相对强度噪声（Rin）✅
+            "img_rin": r"C:\PTS\zhongzi\Rin\FSV3004\Rin.png",# ✅
+            "text_rin": (lambda: 
+                (lambda f: float(next(csv.reader(f))[0]) if f else "未读取到积分数据")(
+                    open(r"C:\PTS\zhongzi\Rin\FSV3004\rin_figure2_max.csv", 'r', encoding='utf-8') if os.path.exists(r"C:\PTS\zhongzi\Rin\FSV3004\rin_figure2_max.csv") else None
+                )
+            )(),
+
+            # Fig.2 PZT（波长计）
+            "img_PZT": "暂无",
+
+            # Fig.3 光谱信噪比
+            "img_spectrumSNR": r"C:\PTS\zhongzi\SpectrumSNR\spectrum.bmp", # ✅
+            "text_SNR": "SNR值",
+
+            # Fig.4 线宽
+            "img_linewidth": r"C:\PTS\zhongzi\LineWidth\image_1000.png", # 标注
+            "text_linewidth": "线宽",
+
+            # Fig.5 偏振测试
+            "img_polarization": r"暂无",
+
+            # 中心波长（波长计）
+            "text_center_wavelength": "波长初始读数",
+            "img_center_wavelength": "波长计运行截图",
+
+            # 输出功率 ✅
+            "text_power": (lambda: 
+                (lambda f: float(next(csv.reader(f))[0]) if f else "未读取到功率数据")(
+                    open(r"C:\PTS\zhongzi\Power\power.csv", 'r', encoding='utf-8') if os.path.exists(r"C:\PTS\zhongzi\Power\power.csv") else None
+                )
+            )(),
+
+            # 功率稳定性
+            "img_power_stability": "烤机数据画图",
+            "text_RMS": "（标准差/平均值）×100% ",
+            "text_P2P": "读取整列数据 （最大值-最小值）/平均值",
+        }
+        
+        # 指定模板和输出路径
+        template_path = os.path.join(os.getcwd(), "report", "templates", "template_default.docx")
+        save_dir = r"C:\PTS\report"
+        os.makedirs(save_dir, exist_ok=True)
+        current_sn = "TEST"  # 默认测试序列号
+        output_path = os.path.join(save_dir, f"{current_sn}_测试报告.docx")
+
+        import threading
+        def _generate_task():
+            try:
+                self.btn_report.config(state="disabled", text="生成中...")
+                
+                # 【严格按照目录结构导入】
+                from report.template_generator import generate_report
+                generate_report(template_path, output_path, report_data)
+                
+                self.root.after(0, lambda: messagebox.showinfo("成功", f"报告生成完毕！\n路径: {output_path}"))
+                self.root.after(0, lambda: self.log("SYSTEM", f"报告生成成功: {output_path}", "completed"))
+            except Exception as e:
+                self.root.after(0, lambda e=e: messagebox.showerror("错误", f"报告生成失败:\n{str(e)}"))
+                self.root.after(0, lambda e=e: self.log("SYSTEM", f"报告生成失败: {str(e)}", "error"))
+            finally:
+                self.root.after(0, lambda: self.btn_report.config(state="normal", text="生成报告"))
+
+        threading.Thread(target=_generate_task, daemon=True).start()
+
     def on_close(self):
+        """
+        关闭应用程序
+        
+        功能:
+            - 终止所有正在运行的子进程
+            - 销毁根窗口
+            - 退出应用程序
+        """
         for name, p in self.processes.items():
             if p.is_alive():
                 p.terminate()
