@@ -15,12 +15,12 @@ def generate_report(template_path, output_path, data_dict):
     for key, value in data_dict.items():
         # 如果键名以 img_ 开头，且值是一个存在的本地路径，则作为图片插入
         if key.startswith('img_') and isinstance(value, str) and os.path.exists(value):
-            # width=Mm(150) 限制图片最大宽度，防止超出 Word A4 纸边界
-            context[key] = InlineImage(doc, value, width=Mm(150))
+            # width=Mm(150), height=Mm(80) 设置图片宽度和高度（会变形）
+            context[key] = InlineImage(doc, value, width=Mm(150), height=Mm(90))
         else:
             # 图片不存在或者是普通文本，直接填入
             if key.startswith('img_') and not os.path.exists(value):
-                 context[key] = "【未找到测试结果图】"
+                 context[key] = "【暂无】"
             else:
                  context[key] = value
 

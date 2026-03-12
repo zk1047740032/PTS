@@ -173,8 +173,7 @@ class SpectrumSNR:
         csv_path = os.path.join(self.params["OUTPUT_DIR"], f"{filename_base}.csv")
         with open(csv_path, mode="w", newline="") as f:
             writer = csv.writer(f)
-            writer.writerow(["SNR(dB)"])
-            writer.writerow([snr])
+            writer.writerow([f"{snr:.2f}"])
         self.log(f"[保存] 结果已保存到：{csv_path}")
         return csv_path
 

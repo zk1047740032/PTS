@@ -3,10 +3,12 @@ import time
 import tkinter as tk
 from tkinter import messagebox, filedialog
 import os
-from PIL import Image, ImageTk
+from PIL import Image, ImageTk, ImageDraw, ImageFont
 import threading
 import shutil
 import ctypes
+import csv
+import math
 
 # 启用DPI感知，解决高DPI屏幕下界面模糊问题
 if os.name == 'nt':
@@ -266,14 +268,54 @@ class LinewidthTester:
         self.log("测量完成")
         return True
 
-    def save_data(self, instr_image_path, instr_trace_csv, pc_shared_folder):
+    def get_ndbdown_result(self):
+        """
+        读取 NdBdown 的测量结果值。
+
+        返回:
+            float: NdBdown 的测量结果值；若失败返回 None。
+        """
+        try:
+            result = self.inst.query("CALC:MARK:FUNC:NDBD:RES?").strip()
+            time.sleep(1.5)
+            ndbdown_value = float(result)
+            self.log(f"[频谱仪] NdBdown值: {ndbdown_value/1000:.2f}kHz")
+            return ndbdown_value
+        except Exception as e:
+            self.log(f"[频谱仪] 读取NdBdown值失败: {e}")
+            return None
+
+    def save_ndbdown_to_csv(self, ndbdown_value, csv_file):
+        """
+        将 NdBdown 值保存到 CSV 文件。
+
+        参数:
+            ndbdown_value (float): 要保存的 NdBdown 值。
+            csv_file (str): CSV 文件的路径。
+        """
+        try:
+            file_exists = os.path.exists(csv_file)
+            # 计算ndbdown除以2倍根号99后的值
+            sqrt_99 = math.sqrt(99)
+            calculated_value = ndbdown_value / (2 * sqrt_99)
+            with open(csv_file, 'a', newline='', encoding='utf-8') as f:
+                writer = csv.writer(f)
+                if not file_exists:
+                    writer.writerow(['NdBdown'])
+                writer.writerow([f"{calculated_value/1000:.2f}"])
+        except Exception as e:
+            self.log(f"[频谱仪] 保存NdBdown失败: {e}")
+
+    def save_data(self, instr_image_path, instr_trace_csv, pc_shared_folder, ndbdown_value=None):
         """
         将频谱仪截图与Trace数据保存到仪器本地，并拷贝到电脑共享文件夹，同时生成同名.dat文件。
+        如果提供了ndbdown_value，则在截图上添加计算公式注释。
 
         参数:
             instr_image_path (str): 期望保存截图的仪器端完整路径（仅用于提取文件名）。
             instr_trace_csv (str): 期望保存Trace数据的仪器端完整路径（仅用于提取文件名）。
             pc_shared_folder (str): 电脑端共享文件夹路径，用于接收拷贝文件。
+            ndbdown_value (float, optional): NdBdown 的测量值，用于在图片上添加计算公式注释。
 
         返回:
             str: 电脑端截图文件的完整路径；若失败则返回None（异常会被抛出）。
@@ -327,20 +369,71 @@ class LinewidthTester:
                 shutil.copyfile(pc_trace_csv, pc_trace_dat)
                 self.log(f"已生成同目录的dat 文件: {dat_filename}")
             
+            # 5. 如果提供了 ndbdown_value，在截图上添加计算公式注释
+            if ndbdown_value is not None and os.path.exists(pc_image_path):
+                try:
+                    self._add_ndbdown_text_to_image(pc_image_path, ndbdown_value)
+                except Exception as e:
+                    self.log(f"[警告] 添加NdBdown文字到图片失败: {e}")
+            
             return pc_image_path
 
         except Exception as e:
             self.log(f"保存数据失败: {e}")
             raise
 
+    def _add_ndbdown_text_to_image(self, image_path, ndbdown_value):
+        """
+        在图片上添加 NdBdown 计算公式的文字注释。
+        公式：NdBdown / (2×√99) ≈ 计算结果
+
+        参数:
+            image_path (str): 图片的文件路径。
+            ndbdown_value (float): NdBdown 的测量值。
+        """
+        try:
+            # 打开图片
+            img = Image.open(image_path)
+            draw = ImageDraw.Draw(img)
+            
+            # 计算结果：ndbdown_value / (2 * sqrt(99))
+            sqrt_99 = math.sqrt(99)
+            result = ndbdown_value / (2 * sqrt_99) / 1000
+            
+            # 创建要显示的文本
+            text = f"{ndbdown_value/1000:.2f}kHz÷(2√99)≈{result:.2f}kHz"
+            
+            # 尝试加载字体，优先使用 Arial，否则使用默认字体
+            try:
+                font = ImageFont.truetype("arial.ttf", 32)
+            except:
+                try:
+                    font = ImageFont.truetype("C:\\Windows\\Fonts\\arial.ttf", 32)
+                except:
+                    font = ImageFont.load_default()
+            
+            # 在图片左上角添加文字（位置可调整）
+            # 使用白色文字，黑色背景增加可读性
+            text_position = (800, 400)
+            
+            # 添加黑色背景框
+            # bbox = draw.textbbox(text_position, text, font=font)
+            # draw.rectangle([bbox[0]-5, bbox[1]-5, bbox[2]+5, bbox[3]+5], fill="black")
+            
+            # 绘制白色文字
+            draw.text(text_position, text, font=font, fill="black")
+            
+            # 保存修改后的图片
+            img.save(image_path)
+            self.log(f"[频谱仪] 已在图片上添加NdBdown计算公式: {text}")
+            
+        except Exception as e:
+            self.log(f"[错误] 处理图片失败: {e}")
+            raise
+
     def close(self):
         """
         关闭频谱仪连接与资源管理器，释放Visa资源。
-
-        参数：
-            无
-        返回：
-            无
         """
         if self.inst:
             try:
@@ -362,12 +455,6 @@ class LinewidthTester:
         
         通过设置 stop_flag 事件通知测量线程立即终止后续操作，
         并记录停止日志。
-        
-        参数:
-            无
-            
-        返回:
-            无
         """
         self.stop_flag.set()
         self.log("测量已停止")
@@ -452,12 +539,6 @@ class LineWidth_FSV3004_GUI:
         3. 右侧放置“运行日志”标签框架，内含可滚动文本框；
         4. 所有输入框统一宽度与标签对齐方式，保证界面整洁；
         5. 将输入控件实例存入 self.entries，供后续读取与保存参数使用。
-
-        参数：
-            无
-
-        返回：
-            无
         """
         # 创建主框架，分为左右两部分
         main_frame = tk.Frame(self.root)
@@ -533,9 +614,6 @@ class LineWidth_FSV3004_GUI:
 
         参数:
             msg (str): 要显示的日志文本。
-
-        返回:
-            无
         """
         t = time.strftime('[%H:%M:%S]')
         self.root.after(0, lambda: self._safe_log_append(f"{t} {msg}\n"))
@@ -546,9 +624,6 @@ class LineWidth_FSV3004_GUI:
 
         参数:
             text (str): 需要追加的日志文本。
-
-        返回:
-            无
         """
         self.log_box.insert(tk.END, text)
         self.log_box.see(tk.END)
@@ -669,6 +744,9 @@ class LineWidth_FSV3004_GUI:
                 # 定义要测试的四个Span值
                 span_values = ['100', '200', '500', '1000', '2000']
                 
+                # 准备 ndbdown.csv 文件路径
+                ndbdown_csv_path = os.path.join(self.params['输出目录'], 'ndbdown.csv')
+                
                 # 保存所有测试结果图片路径和对应的Span值
                 all_results = []
                 
@@ -694,6 +772,13 @@ class LineWidth_FSV3004_GUI:
                         self.log(f"[Span测试] 测量失败，跳过Span: {span}")
                         continue
                     
+                    # 读取 NdBdown 测量结果值
+                    ndbdown_value = self.tester.get_ndbdown_result()
+                    
+                    # 如果成功读取 NdBdown 值，保存到 CSV
+                    if ndbdown_value is not None:
+                        self.tester.save_ndbdown_to_csv(ndbdown_value, ndbdown_csv_path)
+                    
                     # 为不同Span值生成唯一文件名
                     base_name = os.path.splitext(os.path.basename(self.params['仪器本地图片路径']))[0]
                     span_suffix = span.replace('KHZ', 'K').replace('MHZ', 'M')
@@ -709,11 +794,12 @@ class LineWidth_FSV3004_GUI:
                         f"{base_name}_{span_suffix}.csv"
                     )
                     
-                    # 保存数据
+                    # 保存数据（传递 ndbdown_value 参数）
                     image_path = self.tester.save_data(
                         instr_image_path=instr_image_path,
                         instr_trace_csv=instr_trace_csv,
-                        pc_shared_folder=self.params['输出目录']
+                        pc_shared_folder=self.params['输出目录'],
+                        ndbdown_value=ndbdown_value
                     )
                     
                     if image_path and os.path.exists(image_path):
@@ -767,6 +853,13 @@ class LineWidth_FSV3004_GUI:
                         
                         # 执行测量
                         if self.tester.measure():
+                            # 读取 NdBdown 测量结果值
+                            ndbdown_value = self.tester.get_ndbdown_result()
+                            
+                            # 如果成功读取 NdBdown 值，保存到 CSV
+                            if ndbdown_value is not None:
+                                self.tester.save_ndbdown_to_csv(ndbdown_value, ndbdown_csv_path)
+                            
                             # 为额外测试生成唯一文件名
                             base_name = os.path.splitext(os.path.basename(self.params['仪器本地图片路径']))[0]
                             span_suffix = '500+1v'  # 200kHz = 200K
@@ -782,11 +875,12 @@ class LineWidth_FSV3004_GUI:
                                 f"{base_name}_{span_suffix}_with_signal.csv"
                             )
                             
-                            # 保存数据
+                            # 保存数据（传递 ndbdown_value 参数）
                             image_path = self.tester.save_data(
                                 instr_image_path=instr_image_path,
                                 instr_trace_csv=instr_trace_csv,
-                                pc_shared_folder=self.params['输出目录']
+                                pc_shared_folder=self.params['输出目录'],
+                                ndbdown_value=ndbdown_value
                             )
                             
                             if image_path and os.path.exists(image_path):
@@ -841,12 +935,6 @@ class LineWidth_FSV3004_GUI:
 
         通过调用测试实例的 stop() 方法以及设置本类的 stop_flag 事件，
         通知后台线程立即终止后续测量步骤，并在日志中记录停止原因。
-
-        参数:
-            无
-
-        返回:
-            无
         """
         if self.tester:
             self.tester.stop()
@@ -862,9 +950,6 @@ class LineWidth_FSV3004_GUI:
                 - 'image_path' (str): 截图文件的完整路径
                 - 'span_value' (str): 对应的 Span 值
                 - 'file_name' (str): 截图文件名
-
-        返回:
-            无
         """
         win = tk.Toplevel(self.root)
         win.title("测试结果选择")
@@ -921,9 +1006,6 @@ class LineWidth_FSV3004_GUI:
 
             参数:
                 event (tk.Event, optional): Listbox 选择事件对象，可省略。
-
-            返回:
-                无
             """
             selected_index = listbox.curselection()
             if not selected_index:
@@ -958,10 +1040,7 @@ class LineWidth_FSV3004_GUI:
             1. 检查是否已加载图片；
             2. 弹出文件保存对话框，默认格式为 PNG；
             3. 将图片保存到用户选择的路径，并给出成功或失败提示。
-            参数:
-                无
-            返回:
-                无
+
             """
             if not hasattr(img_label, 'current_img'):
                 messagebox.showwarning("提示", "请先选择要保存的图片")
@@ -998,9 +1077,6 @@ class LineWidth_FSV3004_GUI:
         参数:
             image_path (str): 待显示图片的完整文件路径。
             span_value (str, optional): 当前截图对应的 Span 值，用于窗口标题提示；可省略。
-
-        返回:
-            无
         """
         win = tk.Toplevel(self.root)
         
@@ -1043,12 +1119,6 @@ class LineWidth_FSV3004_GUI:
             1. 弹出保存对话框，默认格式为 PNG；
             2. 若用户确认保存，则将图片写入指定路径；
             3. 保存成功或失败均给出对应提示。
-            
-            参数:
-                无
-                
-            返回:
-                无
             """
             save_path = filedialog.asksaveasfilename(defaultextension=".png",
                                                      filetypes=[("PNG 文件", "*.png"), ("所有文件", "*.*")],
@@ -1064,12 +1134,6 @@ class LineWidth_FSV3004_GUI:
         def _close_window():
             """
             关闭当前弹出的图片预览窗口。
-            
-            参数:
-                无
-                
-            返回:
-                无
             """
             win.destroy()
         
@@ -1089,12 +1153,6 @@ class LineWidth_FSV3004_GUI:
     def run(self):
         """
         启动 GUI 主事件循环，使窗口进入可交互状态并等待用户操作。
-
-        参数:
-            无
-
-        返回:
-            无
         """
         self.root.mainloop()
 

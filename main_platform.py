@@ -10,7 +10,7 @@ import time
 import traceback
 import multiprocessing
 from queue import Empty
-
+import docxtpl
 # ==========================================
 # 动态导入辅助函数
 # ==========================================
@@ -806,7 +806,7 @@ class IntegratedPlatform:
             "text_date": time.strftime("%Y/%m/%d"),
 
             # Fig.1 相对强度噪声（Rin）✅
-            "img_rin": r"C:\PTS\zhongzi\Rin\FSV3004\Rin.png",# ✅
+            "img_rin": r"C:\PTS\zhongzi\Rin\FSV3004\Rin.png",
             "text_rin": (lambda: 
                 (lambda f: float(next(csv.reader(f))[0]) if f else "未读取到积分数据")(
                     open(r"C:\PTS\zhongzi\Rin\FSV3004\rin_figure2_max.csv", 'r', encoding='utf-8') if os.path.exists(r"C:\PTS\zhongzi\Rin\FSV3004\rin_figure2_max.csv") else None
@@ -816,19 +816,27 @@ class IntegratedPlatform:
             # Fig.2 PZT（波长计）
             "img_PZT": "暂无",
 
-            # Fig.3 光谱信噪比
-            "img_spectrumSNR": r"C:\PTS\zhongzi\SpectrumSNR\spectrum.bmp", # ✅
-            "text_SNR": "SNR值",
+            # Fig.3 光谱信噪比 ✅
+            "img_spectrumSNR": r"C:\PTS\zhongzi\SpectrumSNR\spectrum.bmp",
+            "text_SNR": (lambda:
+                (lambda f: float(next(csv.reader(f))[0]) if f else "未读取到SNR数据")(
+                    open(r"C:\PTS\zhongzi\SpectrumSNR\spectrum_snr.csv", "r", encoding='utf-8') if os.path.exists(r"C:\PTS\zhongzi\SpectrumSNR\spectrum_snr.csv") else None
+                )
+            )(),
 
             # Fig.4 线宽
-            "img_linewidth": r"C:\PTS\zhongzi\LineWidth\image_1000.png", # 标注
-            "text_linewidth": "线宽",
+            "img_linewidth": r"C:\PTS\zhongzi\LineWidth\image_1000.png", # ✅
+            "text_linewidth": (lambda: # 这里错了，要的是除了2倍根号99后的结果
+                (lambda f: float(list(csv.reader(f))[4][0]) if f else "未读取到Ndbdown数据")(
+                    open(r"C:\PTS\zhongzi\LineWidth\ndbdown.csv", "r", encoding='utf-8') if os.path.exists(r"C:\PTS\zhongzi\LineWidth\ndbdown.csv") else None
+                )
+            )(),
 
             # Fig.5 偏振测试
             "img_polarization": r"暂无",
 
             # 中心波长（波长计）
-            "text_center_wavelength": "波长初始读数",
+            "text_center_wavelength": "{中心波长}",
             "img_center_wavelength": "波长计运行截图",
 
             # 输出功率 ✅
@@ -848,8 +856,8 @@ class IntegratedPlatform:
         template_path = os.path.join(os.getcwd(), "report", "templates", "template_default.docx")
         save_dir = r"C:\PTS\report"
         os.makedirs(save_dir, exist_ok=True)
-        current_sn = "TEST"  # 默认测试序列号
-        output_path = os.path.join(save_dir, f"{current_sn}_测试报告.docx")
+        #current_sn = "TEST"  # 默认测试序列号
+        output_path = os.path.join(save_dir, f"测试报告_{time.strftime('%Y%m%d_%H%M%S')}.docx")
 
         import threading
         def _generate_task():
@@ -860,7 +868,7 @@ class IntegratedPlatform:
                 from report.template_generator import generate_report
                 generate_report(template_path, output_path, report_data)
                 
-                self.root.after(0, lambda: messagebox.showinfo("成功", f"报告生成完毕！\n路径: {output_path}"))
+                #self.root.after(0, lambda: messagebox.showinfo("成功", f"报告生成完毕！\n路径: {output_path}"))
                 self.root.after(0, lambda: self.log("SYSTEM", f"报告生成成功: {output_path}", "completed"))
             except Exception as e:
                 self.root.after(0, lambda e=e: messagebox.showerror("错误", f"报告生成失败:\n{str(e)}"))
