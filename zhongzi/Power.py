@@ -7,6 +7,7 @@ import os
 import time
 import threading
 import csv
+import statistics
 from typing import Optional, Dict, Any
 import ctypes
 import pyvisa
@@ -34,69 +35,6 @@ if os.name == 'nt':
         scaling_factor = 1.0
 else:
     scaling_factor = 1.0
-
-class LaserController:
-    def __init__(self, exe_path, window_title, log_func=print):
-        self.exe_path = exe_path
-        self.window_title = window_title
-        self.app = None
-        self.win = None
-        self.log = log_func
-    
-    def start_or_connect(self, timeout=15.0):
-        try:
-            self.app = Application(backend='uia').connect(title_re=self.window_title, timeout=5)
-            self.win = self.app.window(title_re=self.window_title)
-            self.win.set_focus()
-            self.log("[上位机] 已连接到运行中的窗口")
-        except Exception:
-            self.log("[上位机] 未找到运行实例，尝试启动…")
-            self.app = Application(backend="uia").start(cmd_line=f'"{self.exe_path}"')
-            self.app.connect(title_re=self.window_title, timeout=timeout)
-            self.win = self.app.window(title_re=self.window_title)
-            self.win.wait("ready", timeout=timeout)
-            self.win.set_focus()
-            self.log("[上位机] 已启动并连接")
-        timings.wait_until_passes(5, 0.5, lambda: self.win.exists() and self.win.is_visible())
-        return True
-
-    # ================= 电流控制 =================
-    def get_current_mA(self):
-        """
-        读取当前电流
-        """
-        try:
-            edit = self.win.child_window(auto_id="Label_current", control_type="Text")
-            txt = edit.window_text()
-            return float(txt)
-        except Exception as e:
-            self.log(f"[错误] 读取电流失败: {e}")
-            return None
-
-    def set_current_mA(self):
-        """
-        设置电流
-        """
-        try:
-            edit = self.win.child_window(auto_id="textBox_Current", control_type="Edit")
-            edit.set_edit_text(f"{val_mA:.2f}")
-            btn = self.win.child_window(title="Set", control_type="Button")
-            btn.click()
-            self.log(f"[上位机] 已设置电流: {val_mA:.2f} mA")
-            time.sleep(0.5)
-        except Exception as e:
-            self.log(f"[错误] 设置电流失败：{e}")
-
-    def get_power(self):
-        """
-        读PD值（Power）
-        """
-        try:
-            edit = self.win.child_window(auto_id="label_Power", control_type="Text")
-            txt = edit.window_text()
-            return float(txt)
-        except Exception as e:
-            self.log(f"[错误] 读取功率失败：{e}")
 
 class PowerMeterController:
     def __init__(self, resource: str, log_func=print, timeout_ms: int = 5000):
@@ -216,8 +154,8 @@ class PowerGUI:
         
         if parent is None:
             self.root = tk.Tk()
-            self.root.title("功率计数据采集")
-            self.root.geometry("1220x250")
+            self.root.title("功率")
+            self.root.geometry("1275x510")
             self.root.resizable(True, True)
             try:
                 self.root.iconbitmap(r'PreciLasers.ico')
@@ -228,12 +166,16 @@ class PowerGUI:
 
         self.params = {
             "usb_resource": "",
-            "save_path": r"C:\PTS\zhongzi\Power"
+            "save_path": r"C:\PTS\zhongzi\Power",
+            "burnin_data": r"C:\PTS\zhongzi\Power\burnin_data.csv",
+            "burnin_output": r"C:\PTS\zhongzi\Power"
         }
 
         self.param_labels = {
             "usb_resource": "USB 资源 (VISA)",
-            "save_path": "保存路径"
+            "save_path": "保存路径",
+            "burnin_data": "烤机数据",
+            "burnin_output": "输出路径"
         }
 
         self.create_widgets()
@@ -247,7 +189,7 @@ class PowerGUI:
         left_container = tk.Frame(main_container)
         left_container.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 5))
         
-        param_frame = tk.LabelFrame(left_container, text="参数设置", padx=4, pady=8)
+        param_frame = tk.LabelFrame(left_container, text="功率读取", padx=4, pady=8)
         param_frame.pack(fill=tk.X, expand=False)
 
         self.entries: Dict[str, tk.Entry] = {}
@@ -258,9 +200,9 @@ class PowerGUI:
         self._add_param_entry(connect_frame, "usb_resource", "USB资源:", self.params.get("usb_resource", ""), row=0)
         self._add_param_entry(connect_frame, "save_path", "保存路径:", self.params.get("save_path", "./data"), row=1)
 
-        # 创建按钮框架，放在参数设置边框的正下方，并使其拉伸
-        buttons_frame = tk.Frame(left_container)
-        buttons_frame.pack(fill=tk.BOTH, expand=True, pady=(10, 0))
+        # 创建按钮框架，放在参数设置边框内部
+        buttons_frame = tk.Frame(param_frame)
+        buttons_frame.pack(fill=tk.X, padx=3, pady=4)
 
         # 创建一个内部框架来容纳按钮并使其居中
         buttons_container = tk.Frame(buttons_frame)
@@ -282,30 +224,52 @@ class PowerGUI:
 
         self.btn_list_resources = tk.Button(buttons_container, text="地址",
                                             command=list_visa_resources,
-                                            bg="#1D74C0", fg="#FFFFFF", width=8)
+                                            bg="#1D74C0", fg="#FFFFFF", width=8, cursor="hand2")
         self.btn_list_resources.pack(side=tk.LEFT, padx=8, expand=False)
 
-        self.btn_connect = tk.Button(buttons_container, text="连接", command=self.connect_power_meter, bg="#1D74C0", fg="#FFFFFF", width=8)
+        self.btn_connect = tk.Button(buttons_container, text="连接", command=self.connect_power_meter, bg="#1D74C0", fg="#FFFFFF", width=8, cursor="hand2")
         self.btn_connect.pack(side=tk.LEFT, padx=8, expand=False)
 
-        self.btn_collect = tk.Button(buttons_container, text="开始", command=self.start_collect, bg="#4CAF50", fg="#FFFFFF", width=8)
+        self.btn_collect = tk.Button(buttons_container, text="开始", command=self.start_collect, bg="#4CAF50", fg="#FFFFFF", width=8, cursor="hand2")
         self.btn_collect.pack(side=tk.LEFT, padx=8, expand=False)
+
+        # 烤机数据计算功能框
+        burnin_frame = tk.LabelFrame(left_container, text="烤机数据计算", padx=4, pady=8)
+        burnin_frame.pack(fill=tk.X, expand=False, pady=(10, 0))
+
+        burnin_input_frame = tk.Frame(burnin_frame, padx=4, pady=8)
+        burnin_input_frame.pack(fill=tk.X, padx=3, pady=4)
+
+        self._add_param_entry(burnin_input_frame, "burnin_data", "烤机数据:", self.params.get("burnin_data", ""), row=0, browse="file", entry_width=25)
+        self._add_param_entry(burnin_input_frame, "burnin_output", "输出路径:", self.params.get("burnin_output", ""), row=1, browse="dir", entry_width=25)
+
+        # 烤机计算按钮框架
+        burnin_buttons_frame = tk.Frame(burnin_frame)
+        burnin_buttons_frame.pack(fill=tk.X, padx=3, pady=4)
+
+        burnin_buttons_container = tk.Frame(burnin_buttons_frame)
+        burnin_buttons_container.pack(side=tk.TOP, anchor=tk.CENTER)
+
+        self.btn_burnin_start = tk.Button(burnin_buttons_container, text="开始计算", command=self.start_burnin_calculation, bg="#4CAF50", fg="#FFFFFF", width=8, cursor="hand2")
+        self.btn_burnin_start.pack(side=tk.LEFT, padx=8, expand=False)
 
         log_frame = tk.LabelFrame(main_container, text="运行日志", padx=6, pady=6)
         log_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=(5, 0))
         self.log_box = tk.Text(log_frame)
         self.log_box.pack(fill=tk.BOTH, expand=True)
 
-    def _add_param_entry(self, parent, key, label, default="", row=0, browse=None):
+    def _add_param_entry(self, parent, key, label, default="", row=0, browse=None, entry_width=30):
         tk.Label(parent, text=label, anchor="w", width=8).grid(row=row, column=0, sticky="w", padx=4, pady=4)
-        ent = tk.Entry(parent, width=30)
+        ent = tk.Entry(parent, width=entry_width)
         ent.insert(0, str(self.params.get(key, default)))
         ent.grid(row=row, column=1, padx=4, pady=4)
         self.entries[key] = ent
         if browse == "file":
-            tk.Button(parent, text="浏览", command=lambda k=key: self.browse_file(k)).grid(row=row, column=2, padx=4, pady=4)
+            tk.Button(parent, text="浏览", command=lambda k=key: self.browse_file(k), 
+                     bg="#F0F0F0", fg="#000000", width=4, height=1, relief="flat", cursor="hand2").grid(row=row, column=2, padx=0, pady=2)
         if browse == "dir":
-            tk.Button(parent, text="选择目录", command=lambda k=key: self.browse_dir(k)).grid(row=row, column=2, padx=4, pady=4)
+            tk.Button(parent, text="浏览", command=lambda k=key: self.browse_dir(k), 
+                     bg="#F0F0F0", fg="#000000", width=4, height=0, relief="flat", cursor="hand2").grid(row=row, column=2, padx=0, pady=2)
         return ent
 
     def log(self, msg: str):
@@ -336,14 +300,14 @@ class PowerGUI:
             try:
                 if k in self.entries:
                     val = self.entries[k].get()
-                    if k in ("usb_resource", "save_path"):
+                    if k in ("usb_resource", "save_path", "burnin_data", "burnin_output"):
                         p[k] = val
                     else:
                         p[k] = float(val)
                 else:
                     p[k] = self.params[k]
             except Exception:
-                p[k] = self.params[k] if k in ("usb_resource", "save_path") else float(self.params[k])
+                p[k] = self.params[k] if k in ("usb_resource", "save_path", "burnin_data", "burnin_output") else float(self.params[k])
         return p
 
     def connect_power_meter(self):
@@ -391,6 +355,105 @@ class PowerGUI:
         thread = threading.Thread(target=target, daemon=True)
         thread.start()
         self.log("[主] 采集线程已启动")
+
+    def start_burnin_calculation(self):
+        p = self.get_params()
+
+        burnin_data = p.get("burnin_data", "").strip()
+        burnin_output = p.get("burnin_output", "").strip()
+
+        if not burnin_data:
+            self.log("请选择烤机数据文件")
+            return
+
+        # 确定输出目录
+        if burnin_output:
+            output_dir = burnin_output
+        else:
+            # 如果没有指定输出路径，使用输入文件的目录
+            output_dir = os.path.dirname(burnin_data) or "."
+
+        self.log(f"[烤机计算] 输入文件: {burnin_data}")
+        self.log(f"[烤机计算] 输出目录: {output_dir}")
+
+        try:
+            # 读取CSV文件中的Power列数据
+            power_values = []
+            with open(burnin_data, 'r', encoding='utf-8') as f:
+                reader = csv.reader(f)
+                
+                # 跳过前14行，第15行是表头
+                for _ in range(14):
+                    next(reader, None)
+                
+                headers = next(reader, None)  # 读取第15行的表头
+
+                # 查找Power列的索引
+                power_col_index = None
+                if headers:
+                    for i, header in enumerate(headers):
+                        if header.strip() == 'Power (W)':
+                            power_col_index = i
+                            break
+
+                if power_col_index is None:
+                    self.log("[烤机计算] 错误: 未找到'Power (W)'列")
+                    return
+
+                self.log(f"[烤机计算] 找到Power列，索引: {power_col_index}")
+
+                # 读取Power列数据
+                for row in reader:
+                    if len(row) > power_col_index:
+                        try:
+                            value = float(row[power_col_index])
+                            power_values.append(value)
+                        except ValueError:
+                            continue
+
+            if not power_values:
+                self.log("[烤机计算] 错误: 未读取到任何有效的Power数据")
+                return
+
+            self.log(f"[烤机计算] 读取到 {len(power_values)} 条Power数据")
+
+            # 计算统计数据
+            avg_value = statistics.mean(power_values)
+            std_dev = statistics.stdev(power_values) if len(power_values) > 1 else 0
+            max_value = max(power_values)
+            min_value = min(power_values)
+
+            self.log(f"[烤机计算] 平均值: {avg_value}")
+            self.log(f"[烤机计算] 标准差: {std_dev}")
+            self.log(f"[烤机计算] 最大值: {max_value}")
+            self.log(f"[烤机计算] 最小值: {min_value}")
+
+            # 计算RMS和P2P
+            rms = (std_dev / avg_value) * 100 if avg_value != 0 else 0
+            p2p = (max_value - min_value) / avg_value if avg_value != 0 else 0
+
+            self.log(f"[烤机计算] RMS = (标准差/平均值)×100% = {rms:.2f}%")
+            self.log(f"[烤机计算] P2P = (最大值-最小值)/平均值 = {p2p:.2f}")
+
+            # 输出结果到CSV文件
+            output_file = os.path.join(output_dir, "burnin_result.csv")
+            with open(output_file, 'w', newline='', encoding='utf-8') as f:
+                writer = csv.writer(f)
+                writer.writerow(["指标", "值"])
+                writer.writerow(["RMS (%)", f"{rms:.2f}"])
+                writer.writerow(["P2P", f"{p2p:.2f}"])
+                writer.writerow(["平均值", f"{avg_value:.6f}"])
+                writer.writerow(["标准差", f"{std_dev:.6f}"])
+                writer.writerow(["最大值", f"{max_value:.6f}"])
+                writer.writerow(["最小值", f"{min_value:.6f}"])
+
+            self.log(f"[烤机计算] 结果已保存到: {output_file}")
+            self.log("[烤机计算] 计算完成!")
+
+        except FileNotFoundError:
+            self.log(f"[烤机计算] 错误: 文件未找到: {burnin_data}")
+        except Exception as e:
+            self.log(f"[烤机计算] 处理失败: {e}")
 
     def run(self):
         if self.root.winfo_exists():

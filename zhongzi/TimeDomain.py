@@ -289,8 +289,8 @@ class TimeDomainGUI:
         inner_btn_frame.pack(anchor='center')
         
         # 添加按钮
-        tk.Button(inner_btn_frame, text="保存参数", command=self.update_params, bg="#f4a236", fg="#FFFFFF", width=12).pack(side=tk.LEFT, padx=6)
-        tk.Button(inner_btn_frame, text="开始测试", command=self.start_test, bg="#4CAF50", fg="#FFFFFF", width=12).pack(side=tk.LEFT, padx=6)
+        tk.Button(inner_btn_frame, text="保存参数", command=self.update_params, bg="#f4a236", fg="#FFFFFF", width=12, cursor="hand2").pack(side=tk.LEFT, padx=6)
+        tk.Button(inner_btn_frame, text="开始测试", command=self.start_test, bg="#4CAF50", fg="#FFFFFF", width=12, cursor="hand2").pack(side=tk.LEFT, padx=6)
 
         # --- 日志显示区域 - 右侧 --- 占据整个右侧区域
         log_frame = tk.LabelFrame(main_frame, text="运行日志", padx=5, pady=5)
@@ -425,7 +425,7 @@ class TimeDomainGUI:
         # 创建保存按钮
         button_frame = tk.Frame(win)
         button_frame.pack(fill=tk.X, padx=5, pady=5)
-        tk.Button(button_frame, text="保存图片", command=save_img).pack(side=tk.BOTTOM, padx=5)
+        tk.Button(button_frame, text="保存图片", command=save_img, cursor="hand2").pack(side=tk.BOTTOM, padx=5)
 
     def run(self):
         self.root.mainloop()

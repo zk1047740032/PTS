@@ -596,10 +596,10 @@ class LineWidth_FSV3004_GUI:
         inner_btn_frame = tk.Frame(btn_frame)
         inner_btn_frame.pack(anchor='center')
         
-        self.start_btn = tk.Button(inner_btn_frame, text='开始测试', bg="#4CAF50", fg="#FFFFFF", command=self.start_measurement)
+        self.start_btn = tk.Button(inner_btn_frame, text='开始测试', bg="#4CAF50", fg="#FFFFFF", command=self.start_measurement, cursor="hand2")
         self.start_btn.pack(side='left', padx=6)
         
-        self.stop_btn = tk.Button(inner_btn_frame, text='停止测试', bg="#f44336", fg="#FFFFFF", command=self.stop_measurement, state=tk.DISABLED)
+        self.stop_btn = tk.Button(inner_btn_frame, text='停止测试', bg="#f44336", fg="#FFFFFF", command=self.stop_measurement, state=tk.DISABLED, cursor="hand2")
         self.stop_btn.pack(side='left', padx=6)
         
         # 运行日志区 - 放在右侧
@@ -1060,11 +1060,11 @@ class LineWidth_FSV3004_GUI:
         listbox.bind('<<ListboxSelect>>', show_selected_image)
         
         # 保存按钮
-        save_btn = tk.Button(btn_frame, text="保存选中图片", font=('Arial', 12), bg="#4CAF50", fg="white", command=save_selected_image)
+        save_btn = tk.Button(btn_frame, text="保存选中图片", font=('Arial', 12), bg="#4CAF50", fg="white", command=save_selected_image, cursor="hand2")
         save_btn.pack(side=tk.LEFT, padx=5)
         
         # 关闭按钮
-        close_btn = tk.Button(btn_frame, text="关闭", font=('Arial', 12), bg="#f44336", fg="white", command=win.destroy)
+        close_btn = tk.Button(btn_frame, text="关闭", font=('Arial', 12), bg="#f44336", fg="white", command=win.destroy, cursor="hand2")
         close_btn.pack(side=tk.RIGHT, padx=5)
         
         # 初始显示第一张图片
@@ -1138,10 +1138,10 @@ class LineWidth_FSV3004_GUI:
             win.destroy()
         
         # 添加保存按钮
-        tk.Button(btn_frame, text="保存图片", font=('Arial', 12), command=_save_img).pack(side=tk.LEFT, padx=10)
+        tk.Button(btn_frame, text="保存图片", font=('Arial', 12), command=_save_img, cursor="hand2").pack(side=tk.LEFT, padx=10)
         
         # 添加关闭按钮
-        tk.Button(btn_frame, text="关闭", font=('Arial', 12), command=_close_window).pack(side=tk.RIGHT, padx=10)
+        tk.Button(btn_frame, text="关闭", font=('Arial', 12), command=_close_window, cursor="hand2").pack(side=tk.RIGHT, padx=10)
         
         # 显示图片的标签
         img_label = tk.Label(win, image=win.img_tk)

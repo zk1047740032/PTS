@@ -313,10 +313,10 @@ class SpectrumSNRGUI:
         inner_btn_frame.pack(anchor='center')
         
         # 保存按钮引用，以便禁用/启用
-        self.btn_save = tk.Button(inner_btn_frame, text="保存参数", command=self.update_params, bg="#f4a236", fg="#FFFFFF", width=12)
+        self.btn_save = tk.Button(inner_btn_frame, text="保存参数", command=self.update_params, bg="#f4a236", fg="#FFFFFF", width=12, cursor="hand2")
         self.btn_save.pack(side=tk.LEFT, padx=6)
         
-        self.btn_start = tk.Button(inner_btn_frame, text="开始测试", command=self.start_test, bg="#4CAF50", fg="#FFFFFF", width=12)
+        self.btn_start = tk.Button(inner_btn_frame, text="开始测试", command=self.start_test, bg="#4CAF50", fg="#FFFFFF", width=12, cursor="hand2")
         self.btn_start.pack(side=tk.LEFT, padx=6)
 
         log_frame = tk.LabelFrame(main_frame, text="运行日志", padx=5, pady=5)
@@ -440,7 +440,7 @@ class SpectrumSNRGUI:
                     win.img.save(save_path)
                     messagebox.showinfo("保存成功", f"图片已保存到：{save_path}")
 
-            save_btn = tk.Button(btn_frame, text="保存图片", command=save_img)
+            save_btn = tk.Button(btn_frame, text="保存图片", command=save_img, cursor="hand2")
             save_btn.pack()
 
             lbl = tk.Label(win, image=win.img_tk)

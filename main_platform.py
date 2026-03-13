@@ -71,6 +71,8 @@ def run_module_process(module_name, start_method, msg_queue, cmd_queue):
             from zhongzi.SpectrumSNR import SpectrumSNRGUI as gui_class
         elif module_name == "单频":
             from zhongzi.SingleFrequency import SingleFrequencyGUI as gui_class
+        elif module_name == "Power":
+            from zhongzi.Power import PowerGUI as gui_class
         elif module_name == "CT-波长":
             from qijian.CT_W import CT_W_GUI as gui_class
         elif module_name == "CT-功率":
@@ -170,6 +172,7 @@ MODULE_MAP = {
     "时域": {"start_method": "start_test", "group": "zhongzi"},
     "信噪比": {"start_method": "start_test", "group": "zhongzi"},
     "单频": {"start_method": "start", "group": "zhongzi"},
+    "Power": {"start_method": "start_collect", "group": "zhongzi"},
     "CT-波长": {"start_method": "start_group1", "group": "qijian"},
     "CT-功率": {"start_method": "start_group1", "group": "qijian"},
     "CT-线宽": {"start_method": "start_group1", "group": "qijian"},
@@ -284,8 +287,8 @@ class IntegratedPlatform:
         # 全选/清空按钮
         btn_frame = tk.Frame(control_panel, bg="#ffffff")
         btn_frame.pack(fill=tk.X, padx=10, pady=5)
-        ttk.Button(btn_frame, text="全选", command=self.select_all, width=10).pack(side=tk.LEFT, padx=1)
-        ttk.Button(btn_frame, text="清空", command=self.deselect_all, width=10).pack(side=tk.RIGHT, padx=1)
+        ttk.Button(btn_frame, text="全选", command=self.select_all, width=10, cursor="hand2").pack(side=tk.LEFT, padx=1)
+        ttk.Button(btn_frame, text="清空", command=self.deselect_all, width=10, cursor="hand2").pack(side=tk.RIGHT, padx=1)
 
         self.nb = ttk.Notebook(control_panel)
         self.nb.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
@@ -349,19 +352,19 @@ class IntegratedPlatform:
         # 打开按钮
         self.btn_open = tk.Button(bottom_frame, text="打开", 
                                 bg="#1E96E6", fg="white", font=("微软雅黑", 9, "bold"),
-                                command=self.open_selected_windows)
+                                command=self.open_selected_windows, cursor="hand2")
         self.btn_open.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=2)
 
         # 生成报告
         self.btn_report = tk.Button(bottom_frame, text="生成报告", 
                                     bg="#FF9900", fg="white", font=("微软雅黑", 9, "bold"),
-                                    command=self.on_generate_report)
+                                    command=self.on_generate_report, cursor="hand2")
         self.btn_report.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=2)
         
         # 一键测试按钮
         self.btn_run = tk.Button(bottom_frame, text="一键测试", 
                                 bg="#02BC08", fg="white", font=("微软雅黑", 9, "bold"),
-                                command=self.run_selected_tests)
+                                command=self.run_selected_tests, cursor="hand2")
         self.btn_run.pack(side=tk.RIGHT, fill=tk.X, expand=True, padx=2)
 
         # === 右侧：日志监控 ===
@@ -387,12 +390,12 @@ class IntegratedPlatform:
         
         # 清空日志按钮
         self.btn_clear_log = ttk.Button(button_frame, text="清空日志", 
-                                     command=self.clear_logs, width=10)
+                                     command=self.clear_logs, width=10, cursor="hand2")
         self.btn_clear_log.pack(side=tk.LEFT, padx=1)
         
         # 说明文档按钮
         self.btn_help = ttk.Button(button_frame, text="说明文档", 
-                                 command=self.show_help, width=10)
+                                 command=self.show_help, width=10, cursor="hand2")
         self.btn_help.pack(side=tk.LEFT, padx=1)
 
         log_frame = tk.Frame(right_panel)
@@ -537,7 +540,7 @@ class IntegratedPlatform:
         
         # 添加关闭按钮
         close_button = ttk.Button(help_window, text="关闭", 
-                               command=help_window.destroy, width=10)
+                               command=help_window.destroy, width=10, cursor="hand2")
         close_button.pack(pady=10)
 
     def start_module_process(self, name, auto_start=False):
@@ -656,7 +659,7 @@ class IntegratedPlatform:
             time.sleep(0.1)
             
         # 恢复按钮
-        self.root.after(1000, lambda: self.btn_run.config(state="normal", text="▶ 一键测试"))
+        self.root.after(1000, lambda: self.btn_run.config(state="normal", text="一键测试"))
 
     def process_queue_messages(self):
         """
@@ -848,7 +851,11 @@ class IntegratedPlatform:
 
             # 功率稳定性
             "img_power_stability": "烤机数据画图",
-            "text_RMS": "（标准差/平均值）×100% ",
+            "text_RMS": (lambda: 
+                (lambda f: float(list(csv.reader(f))[1][1]) if f else "未读取到RMS数据")(
+                    open(r"C:\PTS\zhongzi\Power\burnin_result.csv", 'r', encoding='utf-8') if os.path.exists(r"C:\PTS\zhongzi\Power\burnin_result.csv") else None
+                )
+            )(),
             "text_P2P": "读取整列数据 （最大值-最小值）/平均值",
         }
         

@@ -361,7 +361,7 @@ class RinAnalyzer:
         top_frame = tk.Frame(root)
         top_frame.pack(side=tk.TOP, fill=tk.X, pady=10)
         # 在框架中间放置保存按钮
-        tk.Button(top_frame, text="保存", command=save_figure, font=('SimHei', 20)).pack(side=tk.TOP)
+        tk.Button(top_frame, text="保存", command=save_figure, font=('SimHei', 20), cursor="hand2").pack(side=tk.TOP)
 
         """图1: RIN曲线"""
         ax1.plot(self.ddx, self.ddy, color="#085cab", linewidth=2) # 曲线
@@ -746,9 +746,9 @@ class BackgroundNoiseAnalyzer:
         btn_frame.pack(side=tk.TOP)
         
         # 保存图片按钮
-        tk.Button(btn_frame, text="保存图片", command=save_image, font=('SimHei', 16)).pack(side=tk.LEFT, padx=10)
+        tk.Button(btn_frame, text="保存图片", command=save_image, font=('SimHei', 16), cursor="hand2").pack(side=tk.LEFT, padx=10)
         # 保存数据按钮
-        tk.Button(btn_frame, text="保存数据", command=save_data, font=('SimHei', 16)).pack(side=tk.LEFT, padx=10)
+        tk.Button(btn_frame, text="保存数据", command=save_data, font=('SimHei', 16), cursor="hand2").pack(side=tk.LEFT, padx=10)
         
         # 等待图片文件同步到本机（最多等待 timeout 秒）
         timeout = 10.0  # seconds
@@ -1051,12 +1051,12 @@ class RinGUI:
         second_row_frame.pack(fill=tk.X)
         
         # 添加按钮
-        self.btn_rin = tk.Button(first_row_frame, text="测RIN", command=self.start_rin, bg="#28862B", fg="#FFFFFF", width=10)
-        self.btn_bg = tk.Button(first_row_frame, text="测底噪", command=self.start_background, bg="#28862B", fg="#FFFFFF", width=10)
-        self.btn_seed = tk.Button(first_row_frame, text="种子光", command=self.start_seedlight, bg="#28862B", fg="#FFFFFF", width=10)
-        self.btn_connect = tk.Button(second_row_frame, text="连接", command=self.connect_instrument, bg="#1D74C0", fg="#FFFFFF", width=10)
-        self.btn_stop = tk.Button(second_row_frame, text="停止", command=self.stop_running, bg="#f44336", fg="#FFFFFF", width=10)
-        self.btn_rename = tk.Button(second_row_frame, text="改名", command=self.rename_files, bg="#FF9800", fg="#FFFFFF", width=10)
+        self.btn_rin = tk.Button(first_row_frame, text="测RIN", command=self.start_rin, bg="#28862B", fg="#FFFFFF", width=10, cursor="hand2")
+        self.btn_bg = tk.Button(first_row_frame, text="测底噪", command=self.start_background, bg="#28862B", fg="#FFFFFF", width=10, cursor="hand2")
+        self.btn_seed = tk.Button(first_row_frame, text="种子光", command=self.start_seedlight, bg="#28862B", fg="#FFFFFF", width=10, cursor="hand2")
+        self.btn_connect = tk.Button(second_row_frame, text="连接", command=self.connect_instrument, bg="#1D74C0", fg="#FFFFFF", width=10, cursor="hand2")
+        self.btn_stop = tk.Button(second_row_frame, text="停止", command=self.stop_running, bg="#f44336", fg="#FFFFFF", width=10, cursor="hand2")
+        self.btn_rename = tk.Button(second_row_frame, text="改名", command=self.rename_files, bg="#FF9800", fg="#FFFFFF", width=10, cursor="hand2")
         
         # 排列按钮
         # 第一行按钮居中
@@ -1095,9 +1095,9 @@ class RinGUI:
         ent.grid(row=row, column=1, padx=4, pady=4)
         self.entries[key] = ent
         if browse == "file":
-            tk.Button(parent, text="浏览", command=lambda k=key: self.browse_file(k)).grid(row=row, column=2, padx=4, pady=4)
+            tk.Button(parent, text="浏览", command=lambda k=key: self.browse_file(k), cursor="hand2").grid(row=row, column=2, padx=4, pady=4)
         if browse == "dir":
-            tk.Button(parent, text="保存路径", command=lambda k=key: self.browse_savefile(k)).grid(row=row, column=2, padx=4, pady=4)
+            tk.Button(parent, text="保存路径", command=lambda k=key: self.browse_savefile(k), cursor="hand2").grid(row=row, column=2, padx=4, pady=4)
         return ent
 
     def log(self, msg: str):
