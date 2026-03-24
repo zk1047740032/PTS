@@ -73,6 +73,8 @@ def run_module_process(module_name, start_method, msg_queue, cmd_queue):
             from zhongzi.SingleFrequency import SingleFrequencyGUI as gui_class
         elif module_name == "Power":
             from zhongzi.Power import PowerGUI as gui_class
+        elif module_name == "PZT调制":
+            from zhongzi.WaveLength import WaveLengthTestGUI as gui_class
         elif module_name == "CT-波长":
             from qijian.CT_W import CT_W_GUI as gui_class
         elif module_name == "CT-功率":
@@ -173,6 +175,7 @@ MODULE_MAP = {
     "信噪比": {"start_method": "start_test", "group": "zhongzi"},
     "单频": {"start_method": "start", "group": "zhongzi"},
     "Power": {"start_method": "start_collect", "group": "zhongzi"},
+    "PZT调制": {"start_method": "start_test", "group": "zhongzi"},
     "CT-波长": {"start_method": "start_group1", "group": "qijian"},
     "CT-功率": {"start_method": "start_group1", "group": "qijian"},
     "CT-线宽": {"start_method": "start_group1", "group": "qijian"},

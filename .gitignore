@@ -3,6 +3,7 @@
 *.suo
 *.user
 *.json
+.trae
 
 # Python 虚拟环境
 .venv/

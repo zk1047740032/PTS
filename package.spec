@@ -3,10 +3,10 @@
 block_cipher = None
 
 a = Analysis(['main_platform.py'],
-             pathex=['d:\Coding\Project\PreciTestSystem\PTS'],
+             pathex=[r'd:\Coding\Project\PreciTestSystem\PTS'],
              binaries=[],
              datas=[('PreciLasers.ico', '.')],
-             hiddenimports=['pyvisa', 'matplotlib.backends.backend_tkagg', 'PIL._tkinter_finder'],
+             hiddenimports=['pyvisa', 'matplotlib.backends.backend_tkagg', 'PIL._tkinter_finder', 'docxtpl', 'docx', 'jinja2', 'lxml'],
              hookspath=[],
              runtime_hooks=[],
              excludes=[],

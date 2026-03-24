@@ -145,12 +145,6 @@ class SignalGenerator:
     def close(self):
         """
         关闭信号发生器连接与资源管理器，释放VISA资源。
-
-        参数:
-            无
-
-        返回:
-            无
         """
         if self.inst:
             try:
@@ -201,9 +195,6 @@ class LinewidthTester:
 
         参数:
             ip_address (str): 频谱仪的 IP 地址。
-
-        返回:
-            无
         """
         self.inst = self.rm.open_resource(f'TCPIP0::{ip_address}::inst0::INSTR')
         self.inst.timeout = 10000
@@ -220,9 +211,6 @@ class LinewidthTester:
             span (float): 扫频宽度，单位为 kHz。
             rbw (float): 分辨率带宽，单位为 Hz。
             n_db_down (float): 用于线宽测量的 N dB 下降值。
-
-        返回:
-            无
         """
         self.inst.write("INIT:CONT OFF")  # 关闭连续扫描
         # 添加单位：中心频率使用MHZ，带宽使用MHZ，RBW使用HZ
@@ -519,9 +507,6 @@ class LineWidth_FSV3004_GUI:
             window (tk.Toplevel | tk.Tk): 需要居中的窗口对象。
             width (int): 窗口宽度（像素）。
             height (int): 窗口高度（像素）。
-
-        返回:
-            无
         """
         sw = window.winfo_screenwidth()
         sh = window.winfo_screenheight()
@@ -632,12 +617,6 @@ class LineWidth_FSV3004_GUI:
         """
         将当前界面中所有输入框的值保存到 self.params 字典中，
         并在日志中提示参数已更新。
-        
-        参数:
-            无
-            
-        返回:
-            无
         """
         for k, e in self.entries.items():
             v = e.get()
@@ -657,12 +636,6 @@ class LineWidth_FSV3004_GUI:
         6. 控制信号发生器输出 0.1 Hz、0 Vpp、1 Vdc 的正弦波，并在 Span=500 kHz 下追加一次额外测试；
         7. 收集所有截图路径，测试结束后弹出结果选择窗口供用户预览与手动保存；
         8. 无论成功或异常，最终恢复按钮状态并关闭仪器连接。
-
-        参数：
-            无
-
-        返回：
-            无
         """
         if self.worker and self.worker.is_alive():
             messagebox.showinfo('提示', '测试已在进行中')
