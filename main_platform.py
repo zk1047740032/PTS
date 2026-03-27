@@ -400,7 +400,7 @@ class IntegratedPlatform:
         self.log_tree.column("Time", width=80, stretch=False, anchor="center")
         
         self.log_tree.heading("Module", text="模块")
-        self.log_tree.column("Module", width=100, stretch=False, anchor="w")
+        self.log_tree.column("Module", width=110, stretch=False, anchor="w")
         
         self.log_tree.heading("Message", text="消息内容")
         self.log_tree.column("Message", minwidth=200, stretch=True, anchor="w") # 让消息列自动填充剩余空间
@@ -899,7 +899,7 @@ class IntegratedPlatform:
                 generate_report(template_path, output_path, report_data)
                 
                 #self.root.after(0, lambda: messagebox.showinfo("成功", f"报告生成完毕！\n路径: {output_path}"))
-                self.root.after(0, lambda: self.log("SYSTEM", f"报告生成成功: {output_path}", "completed", file_path=output_path))
+                self.root.after(0, lambda: self.log("SYSTEM", f"{output_path}", "completed", file_path=output_path))
             except Exception as e:
                 self.root.after(0, lambda e=e: messagebox.showerror("错误", f"报告生成失败:\n{str(e)}"))
                 self.root.after(0, lambda e=e: self.log("SYSTEM", f"报告生成失败: {str(e)}", "error"))
