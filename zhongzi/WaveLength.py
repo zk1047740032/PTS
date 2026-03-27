@@ -1009,9 +1009,8 @@ class WaveLengthTestGUI:
                 try:
                     with open(wavelength_csv_path, 'w', newline='', encoding='utf-8') as f:
                         writer = csv.writer(f)
-                        writer.writerow(['波长(nm)'])
-                        writer.writerow([f"{wavelength:.6f}"])
-                    self.log(f"[波长] 已读取初始波长: {wavelength:.6f} nm")
+                        writer.writerow([f"{wavelength:.0f}"])
+                    self.log(f"[波长] 已读取初始波长: {wavelength:.0f} nm")
                     self.log(f"[文件] 波长数据已保存: wavelength.csv")
                 except Exception as e:
                     self.log(f"[错误] 保存波长数据失败: {e}")

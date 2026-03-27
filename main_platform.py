@@ -820,7 +820,17 @@ class IntegratedPlatform:
             )(),
 
             # Fig.2 PZT（波长计）
-            "img_PZT": "暂无",
+            "img_PZT": r"C:\PTS\zhongzi\WaveLength\10v.png",
+            "text_PZT_range": (lambda:
+                (lambda f: float(list(csv.reader(f))[1][2]) if f else "未读取到PZT数据")(
+                    open(r"C:\PTS\zhongzi\WaveLength\PZT_range.csv", "r", encoding='utf-8') if os.path.exists(r"C:\PTS\zhongzi\WaveLength\PZT_range.csv") else None
+                )
+            )(),
+            "text_center_wavelength": (lambda:
+                (lambda f: int(next(csv.reader(f))[0]) if f else "未读取到波长数据")(
+                    open(r"C:\PTS\zhongzi\WaveLength\wavelength.csv", "r", encoding='utf-8') if os.path.exists(r"C:\PTS\zhongzi\WaveLength\wavelength.csv") else None
+                )
+            )(),
 
             # Fig.3 光谱信噪比 ✅
             "img_spectrumSNR": r"C:\PTS\zhongzi\SpectrumSNR\spectrum.bmp",
@@ -840,10 +850,6 @@ class IntegratedPlatform:
 
             # Fig.5 偏振测试
             "img_polarization": r"暂无",
-
-            # 中心波长（波长计）
-            "text_center_wavelength": "{中心波长}",
-            "img_center_wavelength": "波长计运行截图",
 
             # 输出功率 ✅
             "text_power": (lambda: 

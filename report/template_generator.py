@@ -16,7 +16,7 @@ def generate_report(template_path, output_path, data_dict):
         # 如果键名以 img_ 开头，且值是一个存在的本地路径，则作为图片插入
         if key.startswith('img_') and isinstance(value, str) and os.path.exists(value):
             # width=Mm(150), height=Mm(80) 设置图片宽度和高度（会变形）
-            context[key] = InlineImage(doc, value, width=Mm(150), height=Mm(90))
+            context[key] = InlineImage(doc, value, width=Mm(145), height=Mm(87))
         else:
             # 图片不存在或者是普通文本，直接填入
             if key.startswith('img_') and not os.path.exists(value):
