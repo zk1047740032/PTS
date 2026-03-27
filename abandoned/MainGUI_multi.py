@@ -25,28 +25,28 @@ else:
 # 为了支持多进程，我们需要动态导入模块
 # 这样每个进程都会有自己的导入副本
 def import_Rin_FSV3004():
-    from zhongzi.Rin_FSV3004 import RinGUI
+    from path_a.Rin_FSV3004 import RinGUI
     return RinGUI
 
 def import_Rin_4051():
-    from zhongzi.Rin_4051 import Rin_4051_GUI
+    from path_a.Rin_4051 import Rin_4051_GUI
     return Rin_4051_GUI
 
 def import_LineWidth():
-    from zhongzi.LineWidth_FSV3004 import LineWidthGUI
+    from path_a.LineWidth_FSV3004 import LineWidthGUI
     return LineWidthGUI
 
 
 def import_TimeDomain():
-    from zhongzi.TimeDomain import TimeDomainGUI
+    from path_a.TimeDomain import TimeDomainGUI
     return TimeDomainGUI
 
 def import_SpectrumSNR():
-    from zhongzi.SpectrumSNR import SpectrumSNRGUI
+    from path_a.SpectrumSNR import SpectrumSNRGUI
     return SpectrumSNRGUI
 
 def import_SingleFrequency():
-    from zhongzi.SingleFrequency import SingleFrequencyGUI
+    from path_a.SingleFrequency import SingleFrequencyGUI
     return SingleFrequencyGUI
 
 def import_CT_W():

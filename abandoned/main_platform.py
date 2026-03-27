@@ -18,13 +18,13 @@ import traceback
 
 try:
     # 导入所有子模块的 GUI 类
-    from zhongzi.Rin_FSV3004 import RinGUI as Rin_FSV3004_GUI
-    from zhongzi.Rin_4051 import Rin_4051_GUI
-    from zhongzi.LineWidth_FSV3004 import LineWidthGUI
+    from path_a.Rin_FSV3004 import RinGUI as Rin_FSV3004_GUI
+    from path_a.Rin_4051 import Rin_4051_GUI
+    from path_a.LineWidth_FSV3004 import LineWidthGUI
 
-    from zhongzi.TimeDomain import TimeDomainGUI
-    from zhongzi.SpectrumSNR import SpectrumSNRGUI
-    from zhongzi.SingleFrequency import SingleFrequencyGUI
+    from path_a.TimeDomain import TimeDomainGUI
+    from path_a.SpectrumSNR import SpectrumSNRGUI
+    from path_a.SingleFrequency import SingleFrequencyGUI
     from qijian.CT_W import CT_W_GUI
     from qijian.CT_P import CT_P_GUI
     from qijian.CT_L import CT_L_GUI

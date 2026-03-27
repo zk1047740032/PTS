@@ -845,4 +845,4 @@ if __name__ == "__main__":
     gui = Rin_4051_GUI()
     gui.run()
 
-# pyinstaller --onefile --noconsole --icon="D:\Coding\Project\PreciTestSystem\PTS\PreciLasers.ico" --hidden-import=pyvisa --hidden-import=tkinter --hidden-import=PIL --hidden-import=matplotlib "D:\Coding\Project\PreciTestSystem\PTS\独立程序\Rin_4051.py"
+# pyinstaller --onefile --noconsole --icon="D:\Coding\Project\PTS\zhongzi\PreciLasers.ico" --hidden-import=pyvisa --hidden-import=tkinter --hidden-import=PIL --hidden-import=matplotlib "D:\Coding\Project\PTS\zhongzi\独立程序\Rin_4051.py"

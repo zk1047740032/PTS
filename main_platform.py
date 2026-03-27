@@ -59,28 +59,20 @@ def run_module_process(module_name, start_method, msg_queue, cmd_queue):
         gui_class = None
         # 导入逻辑保持不变
         if module_name == "Rin_FSV3004":
-            from zhongzi.Rin_FSV3004 import RinGUI as gui_class
-        elif module_name == "Rin_4051":
-            from zhongzi.Rin_4051 import Rin_4051_GUI as gui_class
+            from path_a.Rin_FSV3004 import RinGUI as gui_class
         elif module_name == "线宽_FSV3004":
-            from zhongzi.LineWidth_FSV3004 import LineWidth_FSV3004_GUI as gui_class
+            from path_a.LineWidth_FSV3004 import LineWidth_FSV3004_GUI as gui_class
 
         elif module_name == "时域":
-            from zhongzi.TimeDomain import TimeDomainGUI as gui_class
+            from path_a.TimeDomain import TimeDomainGUI as gui_class
         elif module_name == "信噪比":
-            from zhongzi.SpectrumSNR import SpectrumSNRGUI as gui_class
+            from path_a.SpectrumSNR import SpectrumSNRGUI as gui_class
         elif module_name == "单频":
-            from zhongzi.SingleFrequency import SingleFrequencyGUI as gui_class
-        elif module_name == "Power":
-            from zhongzi.Power import PowerGUI as gui_class
+            from path_a.SingleFrequency import SingleFrequencyGUI as gui_class
+        elif module_name == "功率":
+            from path_a.Power import PowerGUI as gui_class
         elif module_name == "PZT调制":
-            from zhongzi.WaveLength import WaveLengthTestGUI as gui_class
-        elif module_name == "CT-波长":
-            from qijian.CT_W import CT_W_GUI as gui_class
-        elif module_name == "CT-功率":
-            from qijian.CT_P import CT_P_GUI as gui_class
-        elif module_name == "CT-线宽":
-            from qijian.CT_L import CT_L_GUI as gui_class
+            from path_a.WaveLength import WaveLengthTestGUI as gui_class
         
         if not gui_class:
             raise ValueError(f"未知模块: {module_name}")
@@ -168,26 +160,22 @@ def run_module_process(module_name, start_method, msg_queue, cmd_queue):
 # 配置定义 (保持不变)
 # ==========================================
 MODULE_MAP = {
-    "Rin_FSV3004": {"start_method": "start_rin", "group": "zhongzi"},
-    "Rin_4051": {"start_method": "start_test", "group": "zhongzi"},
-    "线宽_FSV3004": {"start_method": "start_measurement", "group": "zhongzi"},
-    "时域": {"start_method": "start_test", "group": "zhongzi"},
-    "信噪比": {"start_method": "start_test", "group": "zhongzi"},
-    "单频": {"start_method": "start", "group": "zhongzi"},
-    "Power": {"start_method": "start_collect", "group": "zhongzi"},
-    "PZT调制": {"start_method": "start_test", "group": "zhongzi"},
-    "CT-波长": {"start_method": "start_group1", "group": "qijian"},
-    "CT-功率": {"start_method": "start_group1", "group": "qijian"},
-    "CT-线宽": {"start_method": "start_group1", "group": "qijian"},
+    "Rin_FSV3004": {"start_method": "start_rin", "group": "ch1"},
+    "线宽_FSV3004": {"start_method": "start_measurement", "group": "ch1"},
+    "时域": {"start_method": "start_test", "group": "ch1"},
+    "信噪比": {"start_method": "start_test", "group": "ch1"},
+    "单频": {"start_method": "start", "group": "ch2"},
+    "功率": {"start_method": "start_collect", "group": "ch1"},
+    "PZT调制": {"start_method": "start_test", "group": "qijian"},
 }
 
 MODULE_GROUPS = {
-    "种子": {
-        "通道1": [name for name, info in MODULE_MAP.items() if info["group"] == "zhongzi"],
-        "通道2": [],
+    "光路A": {
+        "通道1": [name for name, info in MODULE_MAP.items() if info["group"] == "ch1"],
+        "通道2": [name for name, info in MODULE_MAP.items() if info["group"] == "ch2"],
         "通道3": []
     },
-    "器件": [name for name, info in MODULE_MAP.items() if info["group"] == "qijian"],
+    "光路B": [name for name, info in MODULE_MAP.items() if info["group"] == "qijian"],
 }
 
 class IntegratedPlatform:
@@ -240,8 +228,8 @@ class IntegratedPlatform:
             root (tk.Tk): Tkinter 根窗口对象
         """
         self.root = root
-        self.root.title("PTS - 集成测试平台")
-        self.root.geometry("1100x850") # 稍微加大一点
+        self.root.title("PTS-种子")
+        self.root.geometry("860x560")
         try:
             self.root.iconbitmap("PreciLasers.ico")
         except:
@@ -269,7 +257,7 @@ class IntegratedPlatform:
         self.style.theme_use('vista')
         
         # 【修改点 4】：修复 Treeview 行高问题
-        self.style.configure("Treeview", rowheight=30, font=("Microsoft YaHei", 10))
+        self.style.configure("Treeview", rowheight=35, font=("Microsoft YaHei", 10))
         self.style.configure("Treeview.Heading", font=("Microsoft YaHei", 10, "bold"))
         
         # 去掉测试项选项条的背景色
@@ -290,9 +278,32 @@ class IntegratedPlatform:
         # 全选/清空按钮
         btn_frame = tk.Frame(control_panel, bg="#ffffff")
         btn_frame.pack(fill=tk.X, padx=10, pady=5)
-        ttk.Button(btn_frame, text="全选", command=self.select_all, width=10, cursor="hand2").pack(side=tk.LEFT, padx=1)
-        ttk.Button(btn_frame, text="清空", command=self.deselect_all, width=10, cursor="hand2").pack(side=tk.RIGHT, padx=1)
+        ttk.Button(btn_frame, text="全选", command=self.select_all, width=11, cursor="hand2").pack(side=tk.LEFT, padx=1)
+        ttk.Button(btn_frame, text="清空", command=self.deselect_all, width=11, cursor="hand2").pack(side=tk.RIGHT, padx=1)
 
+        # 底部按钮区 - 放在 Notebook 之前，让它优先抢占底部空间
+        bottom_frame = tk.Frame(control_panel, bg="#ffffff")
+        bottom_frame.pack(side=tk.BOTTOM, fill=tk.X, padx=10, pady=10)
+        
+        # 打开按钮
+        self.btn_open = tk.Button(bottom_frame, text="打开", 
+                                bg="#1E96E6", fg="white", font=("微软雅黑", 9, "bold"),
+                                command=self.open_selected_windows, cursor="hand2")
+        self.btn_open.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=2)
+
+        # 生成报告
+        self.btn_report = tk.Button(bottom_frame, text="生成报告", 
+                                    bg="#FF9900", fg="white", font=("微软雅黑", 9, "bold"),
+                                    command=self.on_generate_report, cursor="hand2")
+        self.btn_report.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=2)
+        
+        # 一键测试按钮
+        self.btn_run = tk.Button(bottom_frame, text="一键测试", 
+                                bg="#02BC08", fg="white", font=("微软雅黑", 9, "bold"),
+                                command=self.run_selected_tests, cursor="hand2")
+        self.btn_run.pack(side=tk.RIGHT, fill=tk.X, expand=True, padx=2)
+
+        # Notebook - 放在底部按钮之后，会自适应占据所有"剩余"空间
         self.nb = ttk.Notebook(control_panel)
         self.nb.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
 
@@ -300,7 +311,7 @@ class IntegratedPlatform:
             frame = ttk.Frame(self.nb)
             self.nb.add(frame, text=f" {group_name} ")
             
-            if group_name == "种子":
+            if group_name == "光路A":
                 sub_nb = ttk.Notebook(frame)
                 sub_nb.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
                 
@@ -348,28 +359,6 @@ class IntegratedPlatform:
                     cb.bind("<Double-1>", lambda e, n=name, w=cb: self.on_test_item_double_click(e, n, w))
                     cb.pack(anchor="w", padx=10, pady=5)
 
-        # 底部按钮区
-        bottom_frame = tk.Frame(control_panel, bg="#ffffff")
-        bottom_frame.pack(side=tk.BOTTOM, fill=tk.X, padx=10, pady=10)
-        
-        # 打开按钮
-        self.btn_open = tk.Button(bottom_frame, text="打开", 
-                                bg="#1E96E6", fg="white", font=("微软雅黑", 9, "bold"),
-                                command=self.open_selected_windows, cursor="hand2")
-        self.btn_open.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=2)
-
-        # 生成报告
-        self.btn_report = tk.Button(bottom_frame, text="生成报告", 
-                                    bg="#FF9900", fg="white", font=("微软雅黑", 9, "bold"),
-                                    command=self.on_generate_report, cursor="hand2")
-        self.btn_report.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=2)
-        
-        # 一键测试按钮
-        self.btn_run = tk.Button(bottom_frame, text="一键测试", 
-                                bg="#02BC08", fg="white", font=("微软雅黑", 9, "bold"),
-                                command=self.run_selected_tests, cursor="hand2")
-        self.btn_run.pack(side=tk.RIGHT, fill=tk.X, expand=True, padx=2)
-
         # === 右侧：日志监控 ===
         right_panel = tk.Frame(main_frame, bg="white")
         right_panel.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
@@ -411,7 +400,7 @@ class IntegratedPlatform:
         self.log_tree.column("Time", width=80, stretch=False, anchor="center")
         
         self.log_tree.heading("Module", text="模块")
-        self.log_tree.column("Module", width=120, stretch=False, anchor="w")
+        self.log_tree.column("Module", width=100, stretch=False, anchor="w")
         
         self.log_tree.heading("Message", text="消息内容")
         self.log_tree.column("Message", minwidth=200, stretch=True, anchor="w") # 让消息列自动填充剩余空间
@@ -424,7 +413,7 @@ class IntegratedPlatform:
 
     # ================= 逻辑控制 =================
 
-    def log(self, module, msg, level="info"):
+    def log(self, module, msg, level="info", file_path=None):
         """
         记录日志信息
         
@@ -433,18 +422,43 @@ class IntegratedPlatform:
             msg (str): 日志消息内容
             level (str, optional): 日志级别，默认为 "info"
                 可选值: "info", "error", "completed", "running"
+            file_path (str, optional): 文件路径，如果提供则日志可点击打开
         """
         timestamp = time.strftime("%H:%M:%S")
         tags = (level,)
-        self.log_tree.insert("", "end", values=(timestamp, module, msg), tags=tags)
+        
+        if file_path and os.path.exists(file_path):
+            display_msg = f"{msg}"
+            item_id = self.log_tree.insert("", "end", values=(timestamp, module, display_msg), tags=tags + ("clickable",))
+            self.log_tree.item(item_id, open=False)
+        else:
+            self.log_tree.insert("", "end", values=(timestamp, module, msg), tags=tags)
+        
         self.log_tree.yview_moveto(1)
         
         if level == "error":
             self.log_tree.tag_configure("error", foreground="red")
         elif level == "completed":
-            self.log_tree.tag_configure("completed", foreground="#008000") # 深绿色
+            self.log_tree.tag_configure("completed", foreground="#008000")
         elif level == "running":
             self.log_tree.tag_configure("running", foreground="#0000FF")
+        
+        if file_path and os.path.exists(file_path):
+            self.log_tree.tag_configure("clickable", foreground="#0066CC", font=("Microsoft YaHei", 10, "underline"))
+        
+        if file_path:
+            self.log_tree.tag_bind("clickable", "<Double-Button-1>", lambda e, fp=file_path: self._open_file(fp))
+
+    def _open_file(self, file_path: str):
+        """双击打开文件"""
+        try:
+            if os.name == 'nt':
+                os.startfile(file_path)
+            else:
+                import subprocess
+                subprocess.Popen(['xdg-open', file_path])
+        except Exception as e:
+            messagebox.showerror("错误", f"无法打开文件:\n{file_path}\n\n{str(e)}")
 
     def on_test_item_checked(self, module_name):
         """
@@ -720,11 +734,11 @@ class IntegratedPlatform:
         
         功能:
             - 根据当前激活的页签（包括嵌套的子页签），获取对应的模块名称列表
-            - 处理嵌套结构（如 "种子" 分组下的通道）和扁平结构（如 "器件" 分组）
+            - 处理嵌套结构（如 "光路A" 分组下的通道）和扁平结构（如 "光路B" 分组）
             - 捕获异常并返回空列表
         """
         try:
-            # 1. 获取一级页签 (如 "种子" 或 "器件")
+            # 1. 获取一级页签 (如 "光路A" 或 "光路B")
             current_tab_id = self.nb.select()
             if not current_tab_id: return []
             
@@ -737,7 +751,7 @@ class IntegratedPlatform:
 
             group_data = MODULE_GROUPS[current_tab_text]
 
-            # 2. 判断是否为嵌套结构 (字典即为嵌套，如 "种子")
+            # 2. 判断是否为嵌套结构 (字典即为嵌套，如 "光路A")
             if isinstance(group_data, dict):
                 # 寻找一级页签下的子 Notebook 控件
                 sub_notebook = None
@@ -755,7 +769,7 @@ class IntegratedPlatform:
                         return group_data.get(sub_tab_text, [])
                 return []
             
-            # 3. 扁平结构 (列表即为扁平，如 "器件")
+            # 3. 扁平结构 (列表即为扁平，如 "光路B")
             elif isinstance(group_data, list):
                 return group_data
                 
@@ -885,7 +899,7 @@ class IntegratedPlatform:
                 generate_report(template_path, output_path, report_data)
                 
                 #self.root.after(0, lambda: messagebox.showinfo("成功", f"报告生成完毕！\n路径: {output_path}"))
-                self.root.after(0, lambda: self.log("SYSTEM", f"报告生成成功: {output_path}", "completed"))
+                self.root.after(0, lambda: self.log("SYSTEM", f"报告生成成功: {output_path}", "completed", file_path=output_path))
             except Exception as e:
                 self.root.after(0, lambda e=e: messagebox.showerror("错误", f"报告生成失败:\n{str(e)}"))
                 self.root.after(0, lambda e=e: self.log("SYSTEM", f"报告生成失败: {str(e)}", "error"))
