@@ -883,7 +883,11 @@ class IntegratedPlatform:
         }
         
         # 指定模板和输出路径
-        template_path = os.path.join(os.getcwd(), "report", "templates", "template_default.docx")
+        if getattr(sys, 'frozen', False):
+            base_path = sys._MEIPASS
+        else:
+            base_path = os.getcwd()
+        template_path = os.path.join(base_path, "report", "templates", "template_default.docx")
         save_dir = r"C:\PTS\report"
         os.makedirs(save_dir, exist_ok=True)
         #current_sn = "TEST"  # 默认测试序列号
@@ -928,4 +932,4 @@ if __name__ == "__main__":
     root = tk.Tk()
     app = IntegratedPlatform(root)
     root.mainloop()
-    # pyinstaller package.spec
+    # .venv\Scripts\python.exe -m PyInstaller package.spec

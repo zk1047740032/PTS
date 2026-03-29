@@ -5,7 +5,10 @@ block_cipher = None
 a = Analysis(['main_platform.py'],
              pathex=[r'd:\Coding\Project\PTS\zhongzi'],
              binaries=[],
-             datas=[('PreciLasers.ico', '.')],
+             datas=[
+    ('PreciLasers.ico', '.'),
+    ('report/templates/template_default.docx', 'report/templates'),
+],
              hiddenimports=['pyvisa', 'matplotlib.backends.backend_tkagg', 'PIL._tkinter_finder', 'docxtpl', 'docx', 'jinja2', 'lxml'],
              hookspath=[],
              runtime_hooks=[],
