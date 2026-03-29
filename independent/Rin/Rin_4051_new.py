@@ -363,88 +363,39 @@ class RinWorkflow:
             self.analyzer.timeout_s = dynamic_timeout
         
             if progress_callback:
-                progress_callback(idx/seg_count, f"配置第{idx+1}段...")
+                progress_callback(idx/seg_count, f"配置第{idx}段...")
             ok = self.analyzer.configure(start_hz=start, stop_hz=stop, rbw_hz=rbw, vbw_hz=None, points=self.points_expected, avg_count=avg)
             if not ok:
-                self.log(f"段 {idx+1} 配置失败，跳过")
+                self.log(f"段 {idx} 配置失败，跳过")
                 continue
 
-            # 第一段
-            # if idx == 0:
-            #     self.log(f"[特殊处理] 增加额外等待时间")
-            #     time.sleep(20)  # 额外等待5秒
-                
-            #     # 增加额外的稳定性检查
-            #     try:
-            #         # 发送额外的查询命令来确认仪器状态
-            #         self.analyzer.query("*IDN?")
-            #         self.log("[特殊处理] 仪器状态确认成功")
-            #     except Exception as e:
-            #         self.log(f"[特殊处理] 状态确认异常: {e}")
-            #         # 重新配置这个频段
-            #         self.log("[特殊处理] 重新配置...")
-            #         ok = self.analyzer.configure(start_hz=start, stop_hz=stop, rbw_hz=rbw, vbw_hz=None, points=self.points_expected, avg_count=avg)
-            #         if not ok:
-            #             self.log("[特殊处理] 重新配置失败，跳过该段")
-            #             continue
-            
-            # 添加额外的等待和稳定性处理
-            # if idx == 1:
-            #     self.log(f"[特殊处理] 增加额外等待时间")
-            #     time.sleep(5)  # 额外等待5秒
-            #     # 增加额外的稳定性检查
-            #     try:
-            #         # 发送额外的查询命令来确认仪器状态
-            #         self.analyzer.query("*IDN?")
-            #         self.log("[特殊处理] 仪器状态确认成功")
-            #     except Exception as e:
-            #         self.log(f"[特殊处理] 状态确认异常: {e}")
-            #         # 重新配置这个频段
-            #         self.log("[特殊处理] 重新配置...")
-            #         ok = self.analyzer.configure(start_hz=start, stop_hz=stop, rbw_hz=rbw, vbw_hz=None, points=self.points_expected, avg_count=avg)
-            #         if not ok:
-            #             self.log("[特殊处理] 重新配置失败，跳过该段")
-            #             continue
-            
-            # if idx == 2:
-            #     self.log(f"[特殊处理] 增加额外等待时间")
-            #     time.sleep(5)  # 额外等待5秒
-            #     # 增加额外的稳定性检查
-            #     try:
-            #         # 发送额外的查询命令来确认仪器状态
-            #         self.analyzer.query("*IDN?")
-            #         self.log("[特殊处理] 仪器状态确认成功")
-            #     except Exception as e:
-            #         self.log(f"[特殊处理] 状态确认异常: {e}")
-            #         # 重新配置这个频段
-            #         self.log("[特殊处理] 重新配置...")
-            #         ok = self.analyzer.configure(start_hz=start, stop_hz=stop, rbw_hz=rbw, vbw_hz=None, points=self.points_expected, avg_count=avg)
-            #         if not ok:
-            #             self.log("[特殊处理] 重新配置失败，跳过该段")
-            #             continue
-                
-            if 0 < idx < 6:
+            self.log(f"[等待] 扫描中...")
+
+            # 第1段：100-1k
+            if idx == 1:
                 self.log(f"[特殊处理] 增加额外等待时间")
-                time.sleep(15)  # 额外等待5秒
+                time.sleep(10)  # 额外等待5秒
+
+            # 第2段：1k-10k
+            elif idx == 2:
+                time.sleep(5)  # 额外等待5秒
+
+            # 第3段：10k-100k
+            elif idx == 3:
+                time.sleep(5)  # 额外等待5秒
+
+            # 第4段：100k-1M
+            elif idx == 4:
+                time.sleep(5)  # 额外等待5秒
                 # 增加额外的稳定性检查
-                try:
-                    # 发送额外的查询命令来确认仪器状态
-                    self.analyzer.query("*IDN?")
-                    self.log("[特殊处理] 仪器状态确认成功")
-                except Exception as e:
-                    self.log(f"[特殊处理] 状态确认异常: {e}")
-                    # 重新配置这个频段
-                    self.log("[特殊处理] 重新配置...")
-                    ok = self.analyzer.configure(start_hz=start, stop_hz=stop, rbw_hz=rbw, vbw_hz=None, points=self.points_expected, avg_count=avg)
-                    if not ok:
-                        self.log("[特殊处理] 重新配置失败，跳过该段")
-                        continue
-        
-            # 为最后一段(频率范围最大的段)添加额外等待时间
-            # if idx == seg_count-1:
+
+            # 第5段：1M-5M
+            elif idx == 5:
+                time.sleep(5)  # 额外等待5秒
+
+            # if 0 < idx < 6:
             #     self.log(f"[特殊处理] 增加额外等待时间")
-            #     time.sleep(20)  # 额外等待5秒
-                
+            #     time.sleep(15)  # 额外等待5秒
             #     # 增加额外的稳定性检查
             #     try:
             #         # 发送额外的查询命令来确认仪器状态
@@ -786,6 +737,7 @@ class Rin_4051_GUI:
             x_val = ddx[idx]
             y_val = ddy[idx]
             self.log(f"{x_val:.0f} Hz: {y_val:.3f} dBc/Hz")
+            #messagebox.showinfo(f"{x_val:.0f} Hz: {y_val:.3f} dBc/Hz")
 
         return png_path
 
@@ -845,4 +797,4 @@ if __name__ == "__main__":
     gui = Rin_4051_GUI()
     gui.run()
 
-# pyinstaller --onefile --noconsole --icon="D:\Coding\Project\PTS\zhongzi\PreciLasers.ico" --hidden-import=pyvisa --hidden-import=tkinter --hidden-import=PIL --hidden-import=matplotlib "D:\Coding\Project\PTS\zhongzi\独立程序\Rin_4051.py"
+# pyinstaller --onefile --noconsole --icon="D:\Coding\Project\PTS\zhongzi\PreciLasers.ico" --hidden-import=pyvisa --hidden-import=tkinter --hidden-import=PIL --hidden-import=matplotlib "D:\Coding\Project\PTS\zhongzi\independent\Rin\Rin_4051_new.py"
