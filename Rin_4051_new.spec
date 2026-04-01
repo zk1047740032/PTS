@@ -2,7 +2,7 @@
 
 
 a = Analysis(
-    ['D:\\Coding\\Project\\PreciTestSystem\\PTS\\独立程序\\Rin_4051.py'],
+    ['D:\\Coding\\Project\\PTS\\zhongzi\\independent\\Rin\\Rin_4051_new.py'],
     pathex=[],
     binaries=[],
     datas=[],
@@ -22,7 +22,7 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name='Rin_4051',
+    name='Rin_4051_new',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -35,5 +35,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=['D:\\Coding\\Project\\PreciTestSystem\\PTS\\PreciLasers.ico'],
+    icon=['D:\\Coding\\Project\\PTS\\zhongzi\\PreciLasers.ico'],
 )

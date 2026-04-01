@@ -39,7 +39,7 @@ else:
 # -----------------------------
 # Defaults - change to match your env
 # -----------------------------
-DEFAULT_IP = "192.168.7.10"
+DEFAULT_IP = "192.168.29.11"
 DEFAULT_OUTPUT_DIR = r"C:\PTS\zhongzi\Rin\Ceyear4051"
 DEFAULT_POINTS = 1001
 DEFAULT_SEGMENTS = [
@@ -271,42 +271,22 @@ class Rin_4051:
         vals = struct.unpack(f"<{count}f", data_block[:count*4])
         return list(vals)
 
-    def fetch_and_save_trace(self, output_dir, base_name=None, prefer_binary=True, save_csv=True, save_dat=True):
-        base_name = base_name or now_str()
+    def fetch_and_save_trace(self, output_dir, base_name=None, prefer_binary=True):
+        base_name = base_name or ""
         ensure_dir(output_dir)
         freqs, values, was_binary = self.single_sweep_fetch(prefer_binary=prefer_binary)
         csv_path = None
-        dat_path = None
-        if save_csv:
-            csv_path = os.path.join(output_dir, base_name + ".csv")
-            try:
-                with open(csv_path, 'w', newline='') as f:
-                    writer = csv.writer(f)
-                    writer.writerow(["Frequency(Hz)", "Value"])
-                    for fr, va in zip(freqs, values):
-                        writer.writerow([f"{fr:.9f}", f"{va:.9e}"])
-                #self.log(f"保存 CSV: {csv_path}")
-            except Exception as e:
-                self.log(f"CSV 保存失败: {e}")
-                csv_path = None
-        if save_dat:
-            dat_path = os.path.join(output_dir, base_name + ".dat")
-            try:
-                data_block = struct.pack(f"<{len(values)}f", *[float(v) for v in values])
-                # SCPI-like block header formation (guard maximum len-of-len = 9)
-                data_len_ascii = str(len(data_block)).encode('ascii')   # e.g. b'1024'
-                if len(data_len_ascii) > 9:
-                    raise ValueError("数据块太大，无法用标准 SCPI 单字符头表示")
-                len_of_len = str(len(data_len_ascii)).encode('ascii')  # single-digit
-                header = b"#" + len_of_len + data_len_ascii
-                with open(dat_path, 'wb') as f:
-                    f.write(header)
-                    f.write(data_block)
-                #self.log(f"保存 DAT: {dat_path}")
-            except Exception as e:
-                self.log(f"DAT 保存失败: {e}")
-                dat_path = None
-        return csv_path, dat_path, freqs, values
+        csv_path = os.path.join(output_dir, base_name + ".csv")
+        try:
+            with open(csv_path, 'w', newline='') as f:
+                writer = csv.writer(f)
+                writer.writerow(["Frequency(Hz)", "Value"])
+                for fr, va in zip(freqs, values):
+                    writer.writerow([f"{fr:.9f}", f"{va:.9e}"])
+        except Exception as e:
+            self.log(f"CSV 保存失败: {e}")
+            csv_path = None
+        return csv_path, freqs, values
 
 # -----------------------------
 # RinWorkflow - measurement + processing
@@ -332,11 +312,9 @@ class RinWorkflow:
         self.log("[用户] 请求停止")
         self.stop_flag = True
 
-    def run_measurement(self, prefer_binary=True, save_csv=True, save_dat=True, progress_callback=None):
+    def run_measurement(self, prefer_binary=True, progress_callback=None):
         self.stop_flag = False
-        timestamp = now_str()
-        session_dir = os.path.join(self.output_dir, f"RIN_{timestamp}")
-        ensure_dir(session_dir)
+        ensure_dir(self.output_dir)
         self.freqs_all = []
         self.values_all = []
 
@@ -413,8 +391,8 @@ class RinWorkflow:
             if progress_callback:
                 progress_callback((idx+0.2)/seg_count, f"测量第{idx+1}段...")
             try:
-                base_name = f"{fname.split('.')[0]}_{timestamp}"
-                csvp, datap, freqs, vals = self.analyzer.fetch_and_save_trace(session_dir, base_name=base_name, prefer_binary=prefer_binary, save_csv=save_csv, save_dat=save_dat)
+                base_name = fname.split('.')[0]
+                csvp, freqs, vals = self.analyzer.fetch_and_save_trace(self.output_dir, base_name=base_name, prefer_binary=prefer_binary)
             except Exception as e:
                 self.log(f"段 {idx+1} 测量失败: {e}")
                 continue
@@ -505,7 +483,7 @@ class Rin_4051_GUI:
         # --- 核心修改：如果是集成模式，直接使用父控件作为 root ---
         if parent is None:
             self.root = tk.Tk()
-            self.root.title("Rin_4051-光栅特供")
+            self.root.title("Rin_4051-光栅")
             self.root.geometry("1230x370")
             self.root.resizable(True, True)
             # ... 其他窗口设置 ...
@@ -607,6 +585,22 @@ class Rin_4051_GUI:
         ip_address = self.params.get("IP_ADDRESS", DEFAULT_IP)
         outdir = self.params.get("OUTPUT_DIR") or DEFAULT_OUTPUT_DIR
         ensure_dir(outdir)
+        
+        # 清空保存文件夹
+        self.log("[初始化] 正在清空保存文件夹...")
+        if os.path.exists(outdir):
+            for f in os.listdir(outdir):
+                fp = os.path.join(outdir, f)
+                try:
+                    if os.path.isfile(fp) or os.path.islink(fp):
+                        os.remove(fp)
+                    elif os.path.isdir(fp):
+                        import shutil
+                        shutil.rmtree(fp)
+                except Exception as e:
+                    self.log(f"[警告] 删除 {fp} 失败: {e}")
+        self.log("[初始化] 文件夹清理完成。")
+        
         try:
             dc_input = float(self.params.get("DC_INPUT") or 2.40)
         except Exception:
@@ -650,15 +644,11 @@ class Rin_4051_GUI:
             def progress_cb(frac, msg):
                 # update log and optionally a visual progress (we only log here)
                 self.log(f"[进度] {int(frac*100)}% - {msg}")
-            success = self.workflow.run_measurement(prefer_binary=True, save_csv=True, save_dat=True, progress_callback=progress_cb)
+            success = self.workflow.run_measurement(prefer_binary=True, progress_callback=progress_cb)
             if success:
                 self.log("[主控] 测量完成，准备生成结果图...")
                 png_path = self.visualize_data()
-                if png_path:
-                    try:
-                        self.root.after(0, lambda p=png_path: self.show_image_popup(p))
-                    except Exception:
-                        self.show_image_popup(png_path)
+                self.root.after(0, lambda p=png_path: self._show_result_popups(p))
             else:
                 self.log("[主控] 测量未完成（可能被中止）")
         except Exception as e:
@@ -716,9 +706,8 @@ class Rin_4051_GUI:
 
         # -------- 自动保存逻辑 --------
         outdir = self.params.get("OUTPUT_DIR") or DEFAULT_OUTPUT_DIR
-        timestamp = time.strftime("%Y%m%d_%H%M%S")
         ensure_dir(outdir)
-        png_path = os.path.join(outdir, f"RIN_Result_{timestamp}.png")
+        png_path = os.path.join(outdir, "Rin.png")
         
         try:
             fig.savefig(png_path, dpi=300, bbox_inches='tight')
@@ -729,17 +718,68 @@ class Rin_4051_GUI:
             
         plt.close(fig) # 释放内存，防止连续测试导致内存泄漏
 
-        # -------- 提取指定点的 RIN 值并输出到日志，避免阻塞弹窗 --------
+        # -------- 驰豫振荡峰检测 --------
+        relax_start = 1e5
+        relax_stop = 3e6
+        
+        freqs = np.array(ddx)
+        ys = np.array(ddy)
+        
+        mask = (freqs >= relax_start) & (freqs <= relax_stop) & np.isfinite(ys)
+        
+        highest_rin = float('nan')
+        peak_freq = float('nan')
+
+        if np.any(mask):
+            masked_freqs = freqs[mask]
+            masked_ys = ys[mask]
+            
+            if len(masked_ys) >= 3:
+                center_vals = masked_ys[1:-1]
+                left_vals = masked_ys[:-2]
+                right_vals = masked_ys[2:]
+                
+                is_peak = (center_vals > left_vals) & (center_vals > right_vals)
+                
+                if np.any(is_peak):
+                    peak_indices = np.where(is_peak)[0] + 1
+                    best_peak_idx = peak_indices[np.argmax(masked_ys[peak_indices])]
+                    highest_rin = float(masked_ys[best_peak_idx])
+                    peak_freq = float(masked_freqs[best_peak_idx])
+                else:
+                    max_idx = np.argmax(masked_ys)
+                    highest_rin = float(masked_ys[max_idx])
+                    peak_freq = float(masked_freqs[max_idx])
+            else:
+                max_idx = np.argmax(masked_ys)
+                highest_rin = float(masked_ys[max_idx])
+                peak_freq = float(masked_freqs[max_idx])
+
+        # -------- 构建弹窗文本 --------
         target_xs = [1000, 10000, 100000, 1000000]
-        self.log("--- 关键频点 RIN 值 ---")
+        result_text = f"驰豫振荡峰 ({int(relax_start):d} - {int(relax_stop):d} Hz): {highest_rin:.3f} dBc/Hz @ {peak_freq:.0f} Hz\n\n"
+        
         for tx in target_xs:
             idx = np.argmin(np.abs(np.array(ddx) - tx))
             x_val = ddx[idx]
             y_val = ddy[idx]
-            self.log(f"{x_val:.0f} Hz: {y_val:.3f} dBc/Hz")
-            #messagebox.showinfo(f"{x_val:.0f} Hz: {y_val:.3f} dBc/Hz")
+            if not np.isfinite(y_val):
+                result_text += f"x={x_val:.0f} Hz 时, y=无效数据\n"
+            else:
+                result_text += f"x={x_val:.0f} Hz 时, y={y_val:.3f} dBc/Hz\n"
+
+        # 弹窗显示结果（异步执行，与图片弹窗同时弹出）
+        # 不在 visualize_data 中显示弹窗，而是返回结果文本，由调用处统一弹出
+        self.result_text = result_text
 
         return png_path
+
+    def _show_result_popups(self, png_path):
+        """同时弹出图片弹窗和结果弹窗"""
+        if png_path:
+            self.show_image_popup(png_path)
+        if hasattr(self, 'result_text') and self.result_text:
+            self.root.after(50, lambda: messagebox.showinfo("指定点的RIN值", self.result_text))
 
     def show_image_popup(self, img_path, save_button_top_center=False):
         try:
