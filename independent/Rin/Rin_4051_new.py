@@ -49,7 +49,7 @@ DEFAULT_SEGMENTS = [
     (10000,100000, 30, 10, "File_003.DAT"),
     (100000,1000000, 30, 10, "File_004.DAT"),
     (1000000, 5000000, 30, 10, "File_005.DAT"),
-    (5000000, 10000000, 1000000, 1, "File_005.DAT")
+    (5000000, 10000000, 1000000, 1, "File_006.DAT")
 ]
 
 # -----------------------------
@@ -271,21 +271,22 @@ class Rin_4051:
         vals = struct.unpack(f"<{count}f", data_block[:count*4])
         return list(vals)
 
-    def fetch_and_save_trace(self, output_dir, base_name=None, prefer_binary=True):
+    def fetch_and_save_trace(self, output_dir, base_name=None, prefer_binary=True, save_file=True):
         base_name = base_name or ""
         ensure_dir(output_dir)
         freqs, values, was_binary = self.single_sweep_fetch(prefer_binary=prefer_binary)
         csv_path = None
-        csv_path = os.path.join(output_dir, base_name + ".csv")
-        try:
-            with open(csv_path, 'w', newline='') as f:
-                writer = csv.writer(f)
-                writer.writerow(["Frequency(Hz)", "Value"])
-                for fr, va in zip(freqs, values):
-                    writer.writerow([f"{fr:.9f}", f"{va:.9e}"])
-        except Exception as e:
-            self.log(f"CSV 保存失败: {e}")
-            csv_path = None
+        if save_file:
+            csv_path = os.path.join(output_dir, base_name + ".csv")
+            try:
+                with open(csv_path, 'w', newline='') as f:
+                    writer = csv.writer(f)
+                    writer.writerow(["Frequency(Hz)", "Value"])
+                    for fr, va in zip(freqs, values):
+                        writer.writerow([f"{fr:.9f}", f"{va:.9e}"])
+            except Exception as e:
+                self.log(f"CSV 保存失败: {e}")
+                csv_path = None
         return csv_path, freqs, values
 
 # -----------------------------
@@ -349,27 +350,18 @@ class RinWorkflow:
 
             self.log(f"[等待] 扫描中...")
 
-            # 第1段：100-1k
-            if idx == 1:
-                self.log(f"[特殊处理] 增加额外等待时间")
-                time.sleep(10)  # 额外等待5秒
-
-            # 第2段：1k-10k
-            elif idx == 2:
-                time.sleep(5)  # 额外等待5秒
-
-            # 第3段：10k-100k
-            elif idx == 3:
-                time.sleep(5)  # 额外等待5秒
-
-            # 第4段：100k-1M
-            elif idx == 4:
-                time.sleep(5)  # 额外等待5秒
-                # 增加额外的稳定性检查
-
-            # 第5段：1M-5M
-            elif idx == 5:
-                time.sleep(5)  # 额外等待5秒
+            match idx:
+                case 1: # 第1段：100-1k
+                    self.log(f"[特殊处理] 增加额外等待时间")
+                    time.sleep(10)
+                case 2: # 第2段：1k-10k
+                    time.sleep(5)
+                case 3: # 第3段：10k-100k
+                    time.sleep(5)
+                case 4: # 第4段：100k-1M
+                    time.sleep(5)
+                case 5: # 第5段：1M-5M
+                    time.sleep(5)
 
             # if 0 < idx < 6:
             #     self.log(f"[特殊处理] 增加额外等待时间")
@@ -392,7 +384,10 @@ class RinWorkflow:
                 progress_callback((idx+0.2)/seg_count, f"测量第{idx+1}段...")
             try:
                 base_name = fname.split('.')[0]
-                csvp, freqs, vals = self.analyzer.fetch_and_save_trace(self.output_dir, base_name=base_name, prefer_binary=prefer_binary)
+                is_first = (idx == 0)
+                is_last = (idx == seg_count - 1)
+                save_file = not (is_first or is_last)
+                csvp, freqs, vals = self.analyzer.fetch_and_save_trace(self.output_dir, base_name=base_name, prefer_binary=prefer_binary, save_file=save_file)
             except Exception as e:
                 self.log(f"段 {idx+1} 测量失败: {e}")
                 continue

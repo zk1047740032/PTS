@@ -402,7 +402,7 @@ class LinewidthTester:
             
             # 在图片左上角添加文字（位置可调整）
             # 使用白色文字，黑色背景增加可读性
-            text_position = (800, 400)
+            text_position = (850, 225)
             
             # 添加黑色背景框
             # bbox = draw.textbbox(text_position, text, font=font)

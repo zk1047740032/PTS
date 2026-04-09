@@ -73,7 +73,9 @@ def run_module_process(module_name, start_method, msg_queue, cmd_queue):
             from path_a.Power import PowerGUI as gui_class
         elif module_name == "PZT调制":
             from path_a.WaveLength import WaveLengthTestGUI as gui_class
-        
+        elif module_name == "相噪":
+            from path_a.PhaseNoise import PhaseNoiseGUI as gui_class
+
         if not gui_class:
             raise ValueError(f"未知模块: {module_name}")
 
@@ -164,16 +166,17 @@ MODULE_MAP = {
     "线宽_FSV3004": {"start_method": "start_measurement", "group": "ch1"},
     "时域": {"start_method": "start_test", "group": "ch1"},
     "信噪比": {"start_method": "start_test", "group": "ch1"},
-    "单频": {"start_method": "start", "group": "ch2"},
+    "单频": {"start_method": "start", "group": "ch3"},
     "功率": {"start_method": "start_collect", "group": "ch1"},
     "PZT调制": {"start_method": "start_test", "group": "qijian"},
+    "相噪": {"start_method": "start_test", "group": "ch2"},
 }
 
 MODULE_GROUPS = {
     "光路A": {
         "通道1": [name for name, info in MODULE_MAP.items() if info["group"] == "ch1"],
         "通道2": [name for name, info in MODULE_MAP.items() if info["group"] == "ch2"],
-        "通道3": []
+        "通道3": [name for name, info in MODULE_MAP.items() if info["group"] == "ch3"]
     },
     "光路B": [name for name, info in MODULE_MAP.items() if info["group"] == "qijian"],
 }
