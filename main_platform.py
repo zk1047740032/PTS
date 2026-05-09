@@ -72,7 +72,7 @@ def run_module_process(module_name, start_method, msg_queue, cmd_queue):
         elif module_name == "功率":
             from path_a.Power import PowerGUI as gui_class
         elif module_name == "PZT调制":
-            from path_a.WaveLength import WaveLengthTestGUI as gui_class
+            from path_b.WaveLength import WaveLengthTestGUI as gui_class
         elif module_name == "相噪":
             from path_a.PhaseNoise import PhaseNoiseGUI as gui_class
 

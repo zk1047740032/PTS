@@ -1083,7 +1083,7 @@ class SingleFrequencyGUI:
                     x, y = sa.get_trace_xy()
                     
                     # 细扫峰值检测
-                    fine_peak = PeakDetector(thresh_db=float(p['细扫峰值阈值(dB)']), prom_db=float(p['细扫邻域显著性(dB)']), guard=int(p['细扫邻域点数']), log_func=self.log)
+                    fine_peak = PeakDetector(thresh_db=float(p['峰值阈值(dB)']), prom_db=float(p['邻域显著性(dB)']), guard=int(p['邻域点数']), log_func=self.log)
                     peaks = fine_peak.find(x, y)
                     if peaks:
                         # 获取实际温度和电流值
