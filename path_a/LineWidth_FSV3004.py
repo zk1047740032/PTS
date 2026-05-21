@@ -325,6 +325,8 @@ class LinewidthTester:
             
             # 1. 保存截图到仪器本地路径
             self.inst.write("HCOPy:DEST 'MMEM'")
+            self.inst.write("HCOPy:FILE:NAME:AUTO:STATe OFF")
+            self.inst.write("HCOPy:DEVice:LANGuage PNG")
             self.inst.write(f"MMEM:NAME '{instrument_image_path}'")
             self.inst.write("HCOPy:IMM")
             self.inst.query("*OPC?")
