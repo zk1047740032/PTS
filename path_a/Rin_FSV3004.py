@@ -216,8 +216,9 @@ class RinAnalyzer:
                 for row in reader:
                     if len(row) >= 2:
                         try:
-                            x = float(row[0])
-                            y = float(row[1])
+                            # 兼容逗号作为小数分隔符
+                            x = float(row[0].replace(',', '.'))
+                            y = float(row[1].replace(',', '.'))
                             file_dx.append(x)
                             file_dy.append(y)
                         except ValueError:
