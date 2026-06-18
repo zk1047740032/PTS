@@ -9,6 +9,7 @@ import shutil
 import ctypes
 import csv
 import math
+import numpy as np
 
 # 启用DPI感知，解决高DPI屏幕下界面模糊问题
 if os.name == 'nt':
@@ -166,7 +167,7 @@ class SignalGenerator:
 # 2. 根据给定参数配置频谱仪（参考电平、中心频率、Span、RBW、NdB down 等）；
 # 3. 触发单次扫描并放置 Marker1；
 # 4. 将截图与 Trace 数据保存到仪器本地指定目录；
-# 5. 通过 VISA 的 MMEM:COPY 指令把文件转存到电脑共享文件夹；
+# 5. 通过 SCPI 直读 Trace 数据和截图到 PC 本地；
 # 6. 自动生成同名的 .dat 文件（复制 .csv 改扩展名）；
 # 7. 支持线程安全停止（stop_flag 事件）；
 # 8. 提供关闭连接与资源释放接口。
@@ -196,8 +197,9 @@ class LinewidthTester:
         参数:
             ip_address (str): 频谱仪的 IP 地址。
         """
+        self._ip_address = ip_address
         self.inst = self.rm.open_resource(f'TCPIP0::{ip_address}::inst0::INSTR')
-        self.inst.timeout = 10000
+        self.inst.timeout = 60000
         self.log("已连接到频谱仪")
 
     def configure(self, ref_level, M1_position, center_freq, span, rbw, n_db_down):
@@ -258,20 +260,24 @@ class LinewidthTester:
 
     def get_ndbdown_result(self):
         """
-        读取 NdBdown 的测量结果值。
+        读取 NdBdown 的测量结果值（短超时，失败不阻塞）。
 
         返回:
             float: NdBdown 的测量结果值；若失败返回 None。
         """
+        saved_timeout = self.inst.timeout
         try:
+            self.inst.timeout = 5000
             result = self.inst.query("CALC:MARK:FUNC:NDBD:RES?").strip()
-            time.sleep(1.5)
             ndbdown_value = float(result)
             self.log(f"[频谱仪] NdBdown值: {ndbdown_value/1000:.2f}kHz")
             return ndbdown_value
         except Exception as e:
             self.log(f"[频谱仪] 读取NdBdown值失败: {e}")
+            self.inst.clear()  # 清理 VISA 缓存，避免污染后续操作
             return None
+        finally:
+            self.inst.timeout = saved_timeout
 
     def save_ndbdown_to_csv(self, ndbdown_value, csv_file):
         """
@@ -296,81 +302,83 @@ class LinewidthTester:
 
     def save_data(self, instr_image_path, instr_trace_csv, pc_shared_folder, ndbdown_value=None):
         """
-        将频谱仪截图与Trace数据保存到仪器本地，并拷贝到电脑共享文件夹，同时生成同名.dat文件。
-        如果提供了ndbdown_value，则在截图上添加计算公式注释。
+        纯 SCPI 保存：截图通过 MMEM:DATA? 读回 PC，Trace 通过 TRACe:DATA? 直读，
+        无需 SMB 共享文件夹。同时生成同名 .dat 文件。
 
         参数:
-            instr_image_path (str): 期望保存截图的仪器端完整路径（仅用于提取文件名）。
-            instr_trace_csv (str): 期望保存Trace数据的仪器端完整路径（仅用于提取文件名）。
-            pc_shared_folder (str): 电脑端共享文件夹路径，用于接收拷贝文件。
-            ndbdown_value (float, optional): NdBdown 的测量值，用于在图片上添加计算公式注释。
+            instr_image_path (str): 截图文件名路径（仅用于提取文件名）。
+            instr_trace_csv (str): Trace 数据文件名路径（仅用于提取文件名）。
+            pc_shared_folder (str): 电脑端本地保存目录。
+            ndbdown_value (float, optional): NdBdown 测量值，用于在图片上添加注释。
 
         返回:
-            str: 电脑端截图文件的完整路径；若失败则返回None（异常会被抛出）。
-
-        异常:
-            Exception: 任意步骤失败时抛出，供上层捕获并记录日志。
+            str: 电脑端截图文件的完整路径；若失败则返回 None（异常会被抛出）。
         """
         if self.stop_flag.is_set():
             return False
-        try:
-            # 确保仪器本地路径使用C:\PTS\LineWidth目录
-            # 提取文件名
-            image_filename = os.path.basename(instr_image_path)
-            csv_filename = os.path.basename(instr_trace_csv)
-            
-            # 构建仪器本地完整路径
-            instrument_image_path = f"C:\\PTS\\zhongzi\\LineWidth\\{image_filename}"
-            instrument_csv_path = f"C:\\PTS\\zhongzi\\LineWidth\\{csv_filename}"
-            
-            # 1. 保存截图到仪器本地路径
-            self.inst.write("HCOPy:DEST 'MMEM'")
-            self.inst.write("HCOPy:FILE:NAME:AUTO:STATe OFF")
-            self.inst.write("HCOPy:DEVice:LANGuage PNG")
-            self.inst.write(f"MMEM:NAME '{instrument_image_path}'")
-            self.inst.write("HCOPy:IMM")
-            self.inst.query("*OPC?")
-            self.log(f"截图已保存到仪器内部: {instrument_image_path}")
 
-            # 2. 保存Trace数据到仪器本地路径
-            self.inst.write(f":MMEM:STOR:TRAC 1, '{instrument_csv_path}'")
-            self.inst.query("*OPC?")
-            self.log(f"Trace数据已保存到仪器内部: {instrument_csv_path}")
+        max_retries = 2
+        for attempt in range(max_retries):
+            try:
+                image_filename = os.path.basename(instr_image_path)
+                csv_filename = os.path.basename(instr_trace_csv)
+                dat_filename = os.path.splitext(csv_filename)[0] + '.dat'
 
-            # 3. 将文件从仪器复制到电脑共享文件夹，使用与仪器本地路径相同的文件名
-            dat_filename = os.path.splitext(csv_filename)[0] + '.dat'
-            
-            # 构建电脑共享文件夹中的完整路径
-            pc_image_path = os.path.join(pc_shared_folder, image_filename)
-            pc_trace_csv = os.path.join(pc_shared_folder, csv_filename)
-            pc_trace_dat = os.path.join(pc_shared_folder, dat_filename)
-            
-            # 复制文件
-            self.inst.write(f"MMEM:COPY '{instrument_image_path}', '{pc_image_path}'")
-            self.inst.query("*OPC?")
-            self.log(f"截图已复制到电脑共享文件夹: {image_filename}")
+                dest_dir = pc_shared_folder
+                os.makedirs(dest_dir, exist_ok=True)
+                pc_image_path = os.path.join(dest_dir, image_filename)
+                pc_trace_csv = os.path.join(dest_dir, csv_filename)
+                pc_trace_dat = os.path.join(dest_dir, dat_filename)
 
-            self.inst.write(f"MMEM:COPY '{instrument_csv_path}', '{pc_trace_csv}'")
-            self.inst.query("*OPC?")
-            self.log(f"Trace数据已复制到电脑共享文件夹: {csv_filename}")
+                # 1. 截图：存仪器本地 → MMEM:DATA? 读回 → 删临时文件
+                self.inst.write("HCOPy:DEST 'MMEM'")
+                self.inst.write("HCOPy:FILE:NAME:AUTO:STATe OFF")
+                self.inst.write("HCOPy:DEVice:LANGuage PNG")
+                self.inst.write(f"MMEM:NAME 'C:\\PTS\\zhongzi\\LineWidth\\_temp.png'")
+                self.inst.write("HCOPy:IMM")
+                self.inst.query("*OPC?")
+                png_data = self.inst.query_binary_values("MMEM:DATA? 'C:\\PTS\\zhongzi\\LineWidth\\_temp.png'", datatype='B', container=bytearray)
+                self.inst.write("MMEM:DEL 'C:\\PTS\\zhongzi\\LineWidth\\_temp.png'")
+                with open(pc_image_path, 'wb') as f:
+                    f.write(bytes(png_data))
+                self.log(f"截图已保存到: {pc_image_path}")
 
-            # 4. 生成dat文件，复制csv改扩展名
-            if os.path.exists(pc_trace_csv):
+                # 2. Trace 数据：FORM:DATA 设为二进制 → TRACe:DATA? 直读 → 写 CSV
+                self.inst.write("FORM:DATA REAL,32")
+                amps = self.inst.query_binary_values(":TRACe:DATA? TRACE1", datatype='f', is_big_endian=False)
+                freqs = np.linspace(0, 0, len(amps))  # placeholder，线宽场景不依赖频率轴
+                with open(pc_trace_csv, 'w', newline='') as f:
+                    writer = csv.writer(f)
+                    for freq, amp in zip(freqs, amps):
+                        writer.writerow([freq, amp])
+                self.log(f"Trace 数据已保存到: {pc_trace_csv}")
+
+                # 3. 生成 dat 文件（复制 csv 改扩展名）
                 shutil.copyfile(pc_trace_csv, pc_trace_dat)
-                self.log(f"已生成同目录的dat 文件: {dat_filename}")
-            
-            # 5. 如果提供了 ndbdown_value，在截图上添加计算公式注释
-            if ndbdown_value is not None and os.path.exists(pc_image_path):
-                try:
-                    self._add_ndbdown_text_to_image(pc_image_path, ndbdown_value)
-                except Exception as e:
-                    self.log(f"[警告] 添加NdBdown文字到图片失败: {e}")
-            
-            return pc_image_path
+                self.log(f"已生成同目录的 dat 文件: {dat_filename}")
 
-        except Exception as e:
-            self.log(f"保存数据失败: {e}")
-            raise
+                # 4. 如果提供了 ndbdown_value，在截图上添加注释
+                if ndbdown_value is not None and os.path.exists(pc_image_path):
+                    try:
+                        self._add_ndbdown_text_to_image(pc_image_path, ndbdown_value)
+                    except Exception as e:
+                        self.log(f"[警告] 添加NdBdown文字到图片失败: {e}")
+
+                return pc_image_path
+
+            except Exception as e:
+                self.log(f"保存数据失败（第{attempt+1}次）: {e}")
+                self.inst.clear()
+                if attempt < max_retries - 1:
+                    self.log("尝试重连并重试...")
+                    try:
+                        self.inst.close()
+                    except Exception:
+                        pass
+                    time.sleep(2)
+                    self.connect(self._ip_address)
+                else:
+                    raise
 
     def _add_ndbdown_text_to_image(self, image_path, ndbdown_value):
         """
@@ -491,7 +499,7 @@ class LineWidth_FSV3004_GUI:
             '信号发生器IP': '192.168.7.11',
             '仪器本地图片路径': r"C:\PTS\zhongzi\LineWidth\image.png",
             '仪器本地数据路径': r"C:\PTS\zhongzi\LineWidth\data.csv",
-            '输出目录': r"\\192.168.7.7\PTS\zhongzi\LineWidth"
+            '输出目录': r"C:\PTS\zhongzi\LineWidth"
         }
         
         self.worker = None
@@ -633,7 +641,7 @@ class LineWidth_FSV3004_GUI:
         1. 检查是否已有测试线程在运行，防止重复启动；
         2. 保存当前界面参数到 self.params；
         3. 禁用“开始”按钮、启用“停止”按钮；
-        4. 清空电脑共享文件夹与仪器内部文件夹；
+        4. 清空电脑本地数据文件夹；
         5. 按预设的 Span 列表依次完成多次线宽测量；
         6. 控制信号发生器输出 0.1 Hz、0 Vpp、1 Vdc 的正弦波，并在 Span=500 kHz 下追加一次额外测试；
         7. 收集所有截图路径，测试结束后弹出结果选择窗口供用户预览与手动保存；
@@ -657,7 +665,7 @@ class LineWidth_FSV3004_GUI:
             后台线程任务：执行完整的线宽自动化测试流程。
 
             步骤概览：
-            1. 清空电脑共享文件夹与仪器内部文件夹；
+            1. 清空电脑本地数据文件夹；
             2. 按预设 Span 列表（100/200/500/1000/2000 kHz）依次配置频谱仪并测量；
             3. 控制信号发生器输出 0.1 Hz、0 Vpp、1 Vdc 正弦波，追加 Span=500 kHz 的额外测试；
             4. 收集所有截图路径，测试结束后弹出结果选择窗口供用户预览与手动保存；
@@ -670,10 +678,10 @@ class LineWidth_FSV3004_GUI:
             try:
                 self.log("[开始] 线宽测试开始")
                 
-                # 清空仪器和电脑共享文件夹
-                self.log("[初始化] 正在清空共享文件夹和仪器内部文件夹...")
-                
-                # 1. 清空电脑共享文件夹
+                # 清空电脑本地数据文件夹
+                self.log("[初始化] 正在清空电脑本地数据文件夹...")
+
+                # 电脑本地目录
                 local_dir = self.params['输出目录']
                 if os.path.exists(local_dir):
                     try:
@@ -687,27 +695,10 @@ class LineWidth_FSV3004_GUI:
                                     shutil.rmtree(fp)
                             except Exception as e:
                                 self.log(f"[警告] 删除 {fp} 失败: {e}")
-                        self.log(f"[初始化] 已清空电脑共享文件夹: {local_dir}")
+                        self.log(f"[初始化] 已清空电脑本地文件夹: {local_dir}")
                     except Exception as e:
-                        self.log(f"[错误] 清空电脑共享文件夹失败: {e}")
-                
-                # 2. 清空仪器内部文件夹
-                try:
-                    # 连接仪器以清空文件夹
-                    temp_rm = pyvisa.ResourceManager()
-                    temp_inst = temp_rm.open_resource(f'TCPIP0::{self.params["频谱仪IP"]}::inst0::INSTR')
-                    temp_inst.timeout = 10000
-                    
-                    # 创建目录（如果不存在）
-                    temp_inst.write("MMEM:MDIR 'C:\\PTS\\zhongzi\\LineWidth'")
-                    # 清空目录
-                    temp_inst.write("MMEM:DEL 'C:\\PTS\\zhongzi\\LineWidth\\*.*'")
-                    temp_inst.close()
-                    temp_rm.close()
-                    self.log("[初始化] 已清空仪器内部文件夹: C:\\PTS\\zhongzi\\LineWidth")
-                except Exception as e:
-                    self.log(f"[警告] 清空仪器文件夹失败: {e}")
-                
+                        self.log(f"[错误] 清空电脑本地文件夹失败: {e}")
+
                 self.log("[初始化] 文件夹清理完成。")
                 
                 # 创建测试实例

@@ -16,6 +16,7 @@ import matplotlib.pyplot as plt  # 绘图接口
 from matplotlib.ticker import MaxNLocator  # 坐标轴刻度定位器
 import tkinter as tk  # GUI框架
 from tkinter import messagebox, filedialog, simpledialog  # Tkinter对话框
+from PIL import Image, ImageTk  # 图片处理
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg  # matplotlib与tkinter集成
 
 # 启用DPI感知，解决高DPI屏幕下界面模糊问题
@@ -97,32 +98,27 @@ class RinAnalyzer:
 
         # logging
         self.log = log_func
-        # 等待文件同步的默认超时（秒）及轮询间隔
-        self.file_wait_timeout_s = 30.0
-        self.file_wait_poll_s = 0.5
         # 仪器IP地址
         self.ip_address = "192.168.7.10"
 
-    def connect(self, ip_address="192.168.7.10", port=5025):
+    def connect(self, ip_address="192.168.7.10"):
         """
-        连接频谱分析仪
-        
+        连接频谱分析仪（VXI-11 协议，可读写二进制数据）
+
         参数:
             ip_address (str): 仪器IP地址，默认192.168.7.10
-            port (int): 端口号，默认5025
-            
+
         返回:
             bool: 连接成功返回True，失败返回False
         """
         try:
             self.ip_address = ip_address
             self.rm = pyvisa.ResourceManager()
-            # 使用 SOCKET 地址（与原脚本一致）
-            self.instrument = self.rm.open_resource(f"TCPIP0::{ip_address}::{port}::SOCKET")
+            self.instrument = self.rm.open_resource(f"TCPIP0::{ip_address}::inst0::INSTR")
             self.instrument.timeout = 60000
             self.instrument.read_termination = '\n'
             self.instrument.write_termination = '\n'
-            self.log("成功连接到频谱分析仪")
+            self.log("成功连接到频谱分析仪（VXI-11）")
             return True
         except Exception as e:
             self.log(f"连接失败: {e}")
@@ -169,26 +165,23 @@ class RinAnalyzer:
             self.instrument.write(f":FREQ:STOP {stop_freq} Hz")
             self.instrument.query("*OPC?")
 
-            self.instrument.write(":INIT:CONT OFF")  # 关闭连续模式
+            self.instrument.write(":INIT:CONT OFF")
             self.instrument.write(":INIT")
             self.instrument.query("*OPC?")
-            
-            instrument_path = f"C:\\PTS\\Rin\\{filename}"
-            self.instrument.write("MMEM:MDIR 'C:\\PTS\\Rin'")
-            self.instrument.query("*OPC?")
 
-            self.instrument.write(f":MMEM:STOR:TRAC 1,'{instrument_path}'")
-            self.instrument.query("*OPC?")
-            self.log(f"数据已存储在仪器内部: {instrument_path}")
+            # 通过 VXI-11 直读 trace 数据（需先设为二进制格式）
+            self.instrument.write("FORM:DATA REAL,32")
+            amps = self.instrument.query_binary_values(":TRACe:DATA? TRACE1", datatype='f', is_big_endian=False)
+            freqs = np.linspace(start_freq, stop_freq, len(amps))
 
-            # 复制到共享目录（保留原逻辑）
-            source_path = "C:\\PTS\\Rin"
-            dest_path = r"\\192.168.7.7\PTS\zhongzi\Rin\FSV3004"
-            rm = pyvisa.ResourceManager()
-            instr = rm.open_resource(f"TCPIP0::{self.ip_address}::inst0::INSTR")
-            instr.write(f"MMEM:COPY '{source_path}\\*.*','{dest_path}'")
-            instr.close()
-            self.log(f"文件已从仪器复制到电脑共享文件夹：{dest_path}")
+            dest_dir = r"C:\PTS\zhongzi\Rin\FSV3004"
+            os.makedirs(dest_dir, exist_ok=True)
+            filepath = os.path.join(dest_dir, filename)
+            with open(filepath, 'w', newline='') as f:
+                writer = csv.writer(f)
+                for freq, amp in zip(freqs, amps):
+                    writer.writerow([freq, amp])
+            self.log(f"数据已保存到: {filepath}")
 
         except Exception as e:
             self.log(f"测量失败: {e}")
@@ -255,39 +248,23 @@ class RinAnalyzer:
         self.ddy = []
 
         for file_path in self.file_paths:
-            # 等待文件被复制/同步到本地（存在且大小>0）
-            waited = 0.0
-            file_ready = False
-            while waited < getattr(self, 'file_wait_timeout_s', 30.0):
-                if os.path.exists(file_path) and os.path.getsize(file_path) > 0:
-                    file_ready = True
-                    break
-                time.sleep(getattr(self, 'file_wait_poll_s', 0.5))
-                waited += getattr(self, 'file_wait_poll_s', 0.5)
-
-            if not file_ready:
-                self.log(f"文件不存在或未同步（等待{getattr(self,'file_wait_timeout_s',30.0)}s）: {file_path}")
-                # 保留原行为：把占位空列表加入以维持索引
+            # 数据已通过 SCPI 直写本地，直接读取即可
+            if not (os.path.exists(file_path) and os.path.getsize(file_path) > 0):
+                self.log(f"文件不存在: {file_path}")
                 self.dx.append([])
                 self.dy.append([])
                 continue
 
-            # 尝试读取文件，若失败则重试几次（读取可能因文件正在被写入而瞬时失败）
             read_ok = False
-            read_attempts = 0
-            max_read_attempts = 10
-            while read_attempts < max_read_attempts and not read_ok:
+            for attempt in range(3):
                 try:
                     if self.read_data_from_csv(file_path):
                         self.log(f"成功读取: {file_path}")
                         read_ok = True
                         break
-                    else:
-                        self.log(f"读取失败（尝试{read_attempts+1}）: {file_path}")
                 except Exception as e:
-                    self.log(f"读取异常（尝试{read_attempts+1}）: {file_path} -> {e}")
-                read_attempts += 1
-                time.sleep(1.0)
+                    self.log(f"读取异常（尝试{attempt+1}）: {file_path} -> {e}")
+                time.sleep(0.5)
 
             if not read_ok:
                 self.log(f"最终读取失败: {file_path}")
@@ -577,25 +554,24 @@ class BackgroundNoiseAnalyzer:
         # 仪器IP地址
         self.ip_address = "192.168.7.10"
 
-    def connect(self, ip_address="192.168.7.10", port=5025):
+    def connect(self, ip_address="192.168.7.10"):
         """
-        连接频谱分析仪
-        
+        连接频谱分析仪（VXI-11 协议，可读写二进制数据）
+
         参数:
             ip_address (str): 仪器IP地址，默认192.168.7.10
-            port (int): 端口号，默认5025
-            
+
         返回:
             bool: 连接成功返回True，失败返回False
         """
         try:
             self.ip_address = ip_address
             self.rm = pyvisa.ResourceManager()
-            self.instrument = self.rm.open_resource(f"TCPIP0::{ip_address}::{port}::SOCKET")
+            self.instrument = self.rm.open_resource(f"TCPIP0::{ip_address}::inst0::INSTR")
             self.instrument.timeout = 60000
             self.instrument.read_termination = '\n'
             self.instrument.write_termination = '\n'
-            self.log("成功连接到频谱分析仪")
+            self.log("成功连接到频谱分析仪（VXI-11）")
             return True
         except Exception as e:
             self.log(f"连接失败: {e}")
@@ -644,39 +620,35 @@ class BackgroundNoiseAnalyzer:
             else:
                 self.log("底噪测量完成，开始截图和保存数据...")
 
-            # 保存数据到仪器
-            instrument_path = f"C:\\PTS\\Rin\\{dat_filename}"
-            self.instrument.write("MMEM:MDIR 'C:\\PTS\\Rin'")
-            self.instrument.query("*OPC?")
-            self.instrument.write(f":MMEM:STOR:TRAC 1,'{instrument_path}'")
-            self.instrument.query("*OPC?")
-            
-            # 根据类型显示不同的日志
-            if is_seedlight:
-                self.log(f"种子光数据已存储在仪器内部: {instrument_path}")
-            else:
-                self.log(f"底噪数据已存储在仪器内部: {instrument_path}")
+            # 直读 trace 数据到 PC（需先设为二进制格式）
+            self.instrument.write("FORM:DATA REAL,32")
+            amps = self.instrument.query_binary_values(":TRACe:DATA? TRACE1", datatype='f', is_big_endian=False)
+            freqs = np.linspace(start_freq, stop_freq, len(amps))
+            dest_dir = r"C:\PTS\zhongzi\Rin\FSV3004"
+            os.makedirs(dest_dir, exist_ok=True)
+            dat_path = os.path.join(dest_dir, dat_filename)
+            with open(dat_path, 'w', newline='') as f:
+                writer = csv.writer(f)
+                for freq, amp in zip(freqs, amps):
+                    writer.writerow([freq, amp])
+            self.log(f"数据已保存到: {dat_path}")
 
-            # 截图并保存到仪器
+            # 截图：先存仪器本地，再通过 SCPI 读回 PC（无需 SMB）
+            self.instrument.timeout = 60000
+            self.instrument.write("HCOPy:DEVice:LANGuage PNG")
             self.instrument.write("HCOPy:DEST 'MMEM'")
-            self.instrument.write(f"MMEM:NAME 'C:\\PTS\\Rin\\{screenshot_name}'")
+            self.instrument.write(f"MMEM:NAME 'C:\\PTS\\Rin\\_temp.png'")
             self.instrument.write("HCOPy:IMM")
             self.instrument.query("*OPC?")
-            self.log("仪器已截图并保存。")
+            png_data = self.instrument.query_binary_values("MMEM:DATA? 'C:\\PTS\\Rin\\_temp.png'", datatype='B', container=bytearray)
+            self.instrument.write("MMEM:DEL 'C:\\PTS\\Rin\\_temp.png'")
+            local_png = os.path.join(dest_dir, screenshot_name)
+            with open(local_png, 'wb') as f:
+                f.write(bytes(png_data))
+            self.log(f"截图已保存到: {local_png}")
 
-            # 复制到共享目录（按 Rin 的简化实现：一次性复制整个仪器目录到目标）
-            source_path = "C:\\PTS\\Rin"
-            dest_path = r"\\192.168.7.7\PTS\zhongzi\Rin\FSV3004"
-            rm = pyvisa.ResourceManager()
-            instr = rm.open_resource(f"TCPIP0::{self.ip_address}::inst0::INSTR")
-            # 使用通配符一次性复制（与 Rin 的实现保持一致，注意：健壮性较低，但与用户要求一致）
-            instr.write(f"MMEM:COPY '{source_path}\\*.*','{dest_path}'")
-            instr.close()
-            self.log(f"文件已从仪器复制到电脑共享文件夹：{dest_path}")
-
-            # 直接尝试显示截图（不等待文件同步，行为与 Rin 保持一致）
-            self.show_screenshot(dest_path, screenshot_name, dat_filename, is_seedlight)
-            self.log("已发送复制命令并尝试显示图片。")
+            # 显示截图（dest_path 用 PC 本地路径）
+            self.show_screenshot(dest_dir, screenshot_name, dat_filename, is_seedlight)
 
         except Exception as e:
             self.log(f"底噪测量或截图失败: {e}")
@@ -751,17 +723,9 @@ class BackgroundNoiseAnalyzer:
         # 保存数据按钮
         tk.Button(btn_frame, text="保存数据", command=save_data, font=('SimHei', 16), cursor="hand2").pack(side=tk.LEFT, padx=10)
         
-        # 等待图片文件同步到本机（最多等待 timeout 秒）
-        timeout = 10.0  # seconds
-        poll_interval = 0.5
-        waited = 0.0
-        while not (os.path.exists(local_img_path) and os.path.getsize(local_img_path) > 0) and waited < timeout:
-            time.sleep(poll_interval)
-            waited += poll_interval
-
+        # 截图已通过 SCPI 直写本地，无需网络同步等待
         if not os.path.exists(local_img_path) or os.path.getsize(local_img_path) == 0:
-            # 未同步到本地，显示文字提示而不是直接抛错
-            msg = f"图片尚未同步到电脑（等待{timeout}s未出现）：{local_img_path}"
+            msg = f"图片未找到：{local_img_path}"
             tk.Label(win, text=msg, fg="red", wraplength=700, justify='left').pack(padx=8, pady=8)
             self.log(f"[显示] {msg}")
         else:
@@ -817,12 +781,11 @@ class TestRunner:
             ip_address (str): 仪器IP地址，默认192.168.7.10
         """
         """
-        Run RIN sequence - this mirrors the original Rin(ra) function behavior but routed through log_func.
-        保持原来测量段、顺序、文件拷贝、process_files、visualize_data 等逻辑不变。
+        Run RIN sequence — 测量数据通过 SCPI 直读保存到 PC 本地，无需文件拷贝。
         """
         try:
             try:
-                self.log("[初始化] 正在清空共享文件夹和仪器内部文件夹...")
+                self.log("[初始化] 正在清空电脑本地数据文件夹...")
 
                 # 电脑本地目录
                 local_dir = r"C:\PTS\zhongzi\Rin\FSV3004"
@@ -837,18 +800,6 @@ class TestRunner:
                                 shutil.rmtree(fp)
                         except Exception as e:
                             self.log(f"[警告] 删除 {fp} 失败: {e}")
-
-                # 仪器目录清空
-                try:
-                    rm = pyvisa.ResourceManager()
-                    inst = rm.open_resource(f"TCPIP0::{ip_address}::5025::SOCKET")
-                    inst.write("MMEM:MDIR 'C:\\PTS\\Rin'")  # 确保路径存在
-                    inst.write("MMEM:DEL 'C:\\PTS\\Rin\\*.*'")
-                    #inst.query("*OPC?")
-                    inst.close()
-                    rm.close()
-                except Exception as e:
-                    self.log(f"[警告] 仪器文件夹清理失败: {e}")
 
                 self.log("[初始化] 文件夹清理完成。")
             except Exception as e:
@@ -1169,8 +1120,7 @@ class RinGUI:
             self.log("[连接] 正在尝试连接仪器...")
             ra = RinAnalyzer(log_func=self.log)  # 临时创建一个测试连接实例
             ip = self.entries["osa_ip"].get().strip()
-            port = 5025
-            success = ra.connect(ip, port)
+            success = ra.connect(ip)
             if success:
                 self.log("[连接] 成功连接到 FSV3004 频谱仪。")
             else:
