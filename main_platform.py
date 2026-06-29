@@ -11,6 +11,7 @@ import traceback
 import multiprocessing
 from queue import Empty
 import docxtpl
+from path_a.LightSwitch import OpticalSwitch
 # ==========================================
 # 动态导入辅助函数
 # ==========================================
@@ -92,16 +93,18 @@ def run_module_process(module_name, start_method, msg_queue, cmd_queue):
         def trigger_test():
             """
             触发测试的具体逻辑
-            
+
             功能:
                 - 检查是否存在指定的启动方法
                 - 发送测试开始的消息到消息队列
                 - 更新应用窗口标题为运行中状态
                 - 执行测试方法
+                - 测试完成后自动关闭窗口（触发 mainloop 退出 → 进程结束）
                 - 处理测试过程中的异常
-            
+
             异常处理:
                 - 捕获执行测试过程中的异常，并通过消息队列上报错误信息
+                - 出错后也会自动关闭窗口
             """
             try:
                 if start_method and hasattr(app_instance, start_method):
@@ -109,13 +112,17 @@ def run_module_process(module_name, start_method, msg_queue, cmd_queue):
                     try:
                         app_instance.root.title(f"{module_name} [运行中...]")
                     except: pass
-                    
+
                     method = getattr(app_instance, start_method)
-                    method() # 执行测试
+                    method() # 执行测试（同步阻塞）
+                    # 测试完成 → 自动关闭窗口
+                    app_instance.root.after(500, app_instance.root.destroy)
                 else:
                     msg_queue.put((module_name, "warning", f"未找到启动方法 {start_method}"))
             except Exception as e:
                 msg_queue.put((module_name, "error", f"执行错误: {str(e)}"))
+                # 出错后也自动关闭窗口，避免阻塞通道切换
+                app_instance.root.after(1000, app_instance.root.destroy)
 
         # === 【修改点 2】：监听命令队列 ===
         def check_command_queue():
@@ -181,6 +188,12 @@ MODULE_GROUPS = {
     "光路B": [name for name, info in MODULE_MAP.items() if info["group"] == "qijian"],
 }
 
+# ==========================================
+# 光开关配置
+# ==========================================
+OPTICAL_SWITCH_VISA = "USB0::0x0005::0x0012::87104000113::INSTR"
+CHANNEL_SWITCH_DELAY = 1.5  # 切换通道后稳定延时（秒）
+
 class IntegratedPlatform:
     """
     集成测试平台主类
@@ -244,7 +257,15 @@ class IntegratedPlatform:
         self.msg_queue = multiprocessing.Queue() 
 
         self.setup_ui()
-        
+
+        # 初始化光开关
+        self.optical_switch = OpticalSwitch(
+            OPTICAL_SWITCH_VISA,
+            log_func=lambda msg: self.log("光开关", msg)
+        )
+        if not self.optical_switch.connect():
+            self.log("光开关", "光开关连接失败，一键测试时通道切换将不可用", "error")
+
         self.root.after(100, self.process_queue_messages)
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
 
@@ -637,49 +658,130 @@ class IntegratedPlatform:
 
     def run_selected_tests(self):
         """
-        并发启动测试
-        
-        功能:
-            - 获取所有已勾选的测试项
-            - 如果没有勾选任何测试项，显示警告
-            - 禁用一键测试按钮并显示正在下发指令状态
-            - 对于每个勾选的测试项：
-                - 如果窗口已打开（进程存活），通过命令队列发送开始测试指令
-                - 如果找不到命令队列，尝试重启进程
-                - 如果窗口未打开，启动进程并自动开始测试
-            - 稍作延时，避免瞬间并发过高冲击
-            - 恢复按钮状态
+        一键测试：按通道顺序编排测试
+
+        光路A（ch1/ch2/ch3）通过光开关切换，需按通道顺序串行执行，
+        同一通道内的多个模块可并行运行。
+        光路B（qijian）不经过光开关，与光路A并行执行。
+
+        执行流程:
+            1. 按 MODULE_MAP["group"] 将勾选项分为 ch1/ch2/ch3/qijian 四组
+            2. 立即启动 qijian（光路B）组，无需等待光开关
+            3. 后台线程按 ch1 → ch2 → ch3 顺序编排光路A：
+                a. 切换光开关到目标通道
+                b. 等待稳定延时
+                c. 并行启动该通道所有模块
+                d. 轮询等待该通道全部完成
         """
         selected = [name for name, var in self.check_vars.items() if var.get()]
         if not selected:
             messagebox.showwarning("提示", "请先勾选测试项")
             return
 
-        self.btn_run.config(state="disabled", text="正在下发指令...")
+        self.btn_run.config(state="disabled", text="测试中...")
         self.log("SYSTEM", f"准备执行任务: {', '.join(selected)}")
-        
+
+        # 按 group 分组
+        channel_groups = {"ch1": [], "ch2": [], "ch3": [], "qijian": []}
         for name in selected:
-            # 情况1: 窗口已经打开（进程存活）
+            group = MODULE_MAP[name]["group"]
+            if group in channel_groups:
+                channel_groups[group].append(name)
+
+        # 光路B（qijian）：立即启动，独立并行
+        for name in channel_groups.get("qijian", []):
             if name in self.processes and self.processes[name].is_alive():
-                self.log(name, "窗口已存在，发送【开始测试】指令", "running")
-                # 【关键逻辑】：通过队列发送指令
                 if name in self.cmd_queues:
                     self.cmd_queues[name].put("START")
+                    self.log(name, "窗口已存在，发送【开始测试】指令", "running")
                 else:
                     self.log(name, "错误：找不到命令队列，尝试重启进程", "error")
-                    # 容错处理：重启
                     self.processes[name].terminate()
                     self.start_module_process(name, auto_start=True)
-            
-            # 情况2: 窗口未打开
             else:
                 self.start_module_process(name, auto_start=True)
-            
-            # 稍作延时，避免瞬间并发过高冲击
             time.sleep(0.1)
-            
-        # 恢复按钮
-        self.root.after(1000, lambda: self.btn_run.config(state="normal", text="一键测试"))
+
+        # 光路A（ch1/ch2/ch3）：后台线程按通道顺序编排
+        channel_modules = {k: v for k, v in channel_groups.items() if k != "qijian"}
+        threading.Thread(
+            target=self._orchestrate_channel_tests,
+            args=(channel_modules,),
+            daemon=True
+        ).start()
+
+    def _orchestrate_channel_tests(self, channel_groups: dict):
+        """
+        按通道顺序编排光路A的测试（在后台线程中运行）
+
+        Args:
+            channel_groups: {"ch1": [...], "ch2": [...], "ch3": [...]}
+        """
+        channel_map = {"ch1": 1, "ch2": 2, "ch3": 3}
+
+        for group_key in ["ch1", "ch2", "ch3"]:
+            modules = channel_groups.get(group_key, [])
+            if not modules:
+                continue
+
+            channel_num = channel_map[group_key]
+            self.log("SYSTEM", f"========== 开始通道 {channel_num} 测试 ==========", "running")
+
+            # 1. 切换光开关
+            try:
+                self.optical_switch.set_channel(channel_num)
+                self.log("光开关", f"已切换到通道 {channel_num}")
+            except Exception as e:
+                self.log("光开关", f"通道切换失败: {e}", "error")
+                # 切换失败不阻断流程，用户可能手动切换了
+
+            time.sleep(CHANNEL_SWITCH_DELAY)
+
+            # 2. 并行启动该通道所有模块
+            for name in modules:
+                try:
+                    if name in self.processes and self.processes[name].is_alive():
+                        if name in self.cmd_queues:
+                            self.cmd_queues[name].put("START")
+                            self.log(name, "窗口已存在，发送【开始测试】指令", "running")
+                        else:
+                            self.log(name, "错误：找不到命令队列，尝试重启进程", "error")
+                            self.processes[name].terminate()
+                            self.start_module_process(name, auto_start=True)
+                    else:
+                        self.start_module_process(name, auto_start=True)
+                except Exception as e:
+                    self.log(name, f"启动失败: {e}", "error")
+                time.sleep(0.1)
+
+            # 3. 等待该通道所有模块完成
+            self._wait_for_modules(modules)
+            self.log("SYSTEM", f"========== 通道 {channel_num} 测试完成 ==========", "completed")
+
+        # 全部完成，恢复按钮
+        self.root.after(0, lambda: self.btn_run.config(state="normal", text="一键测试"))
+        self.log("SYSTEM", "所有通道测试完成", "completed")
+
+    def _wait_for_modules(self, module_names: list):
+        """
+        轮询等待指定模块全部完成（在后台线程中调用）
+
+        检查逻辑：模块不存在于 self.processes（已被 process_queue_messages 清理）
+        或进程不再存活，均视为已完成。
+
+        Args:
+            module_names: 要等待的模块名称列表
+        """
+        while True:
+            all_done = True
+            for name in module_names:
+                p = self.processes.get(name)
+                if p and p.is_alive():
+                    all_done = False
+                    break
+            if all_done:
+                break
+            time.sleep(0.5)
 
     def process_queue_messages(self):
         """
@@ -927,6 +1029,7 @@ class IntegratedPlatform:
         for name, p in self.processes.items():
             if p.is_alive():
                 p.terminate()
+        self.optical_switch.close()
         self.root.destroy()
         sys.exit(0)
 
