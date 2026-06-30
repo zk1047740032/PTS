@@ -1178,6 +1178,8 @@ class RinGUI:
                 except Exception:
                     pass
                 self.running_task = None
+                # 一键测试模式：自动关闭窗口，触发进程退出
+                self.root.after(2000, self.root.destroy)
 
         self.worker_thread = threading.Thread(target=target, daemon=True)
         self.worker_thread.start()

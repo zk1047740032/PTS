@@ -98,13 +98,12 @@ def run_module_process(module_name, start_method, msg_queue, cmd_queue):
                 - 检查是否存在指定的启动方法
                 - 发送测试开始的消息到消息队列
                 - 更新应用窗口标题为运行中状态
-                - 执行测试方法
-                - 测试完成后自动关闭窗口（触发 mainloop 退出 → 进程结束）
+                - 执行测试方法（各模块的 start_xxx 方法为非阻塞，后台线程执行实际测试）
                 - 处理测试过程中的异常
 
-            异常处理:
-                - 捕获执行测试过程中的异常，并通过消息队列上报错误信息
-                - 出错后也会自动关闭窗口
+            注意:
+                - 窗口关闭由各模块在测试线程完成后自行调用 root.destroy()，
+                  不在 trigger_test 中统一处理，因为各模块是异步执行的。
             """
             try:
                 if start_method and hasattr(app_instance, start_method):
@@ -114,15 +113,11 @@ def run_module_process(module_name, start_method, msg_queue, cmd_queue):
                     except: pass
 
                     method = getattr(app_instance, start_method)
-                    method() # 执行测试（同步阻塞）
-                    # 测试完成 → 自动关闭窗口
-                    app_instance.root.after(500, app_instance.root.destroy)
+                    method() # 启动测试（非阻塞，各模块内创建后台线程）
                 else:
                     msg_queue.put((module_name, "warning", f"未找到启动方法 {start_method}"))
             except Exception as e:
                 msg_queue.put((module_name, "error", f"执行错误: {str(e)}"))
-                # 出错后也自动关闭窗口，避免阻塞通道切换
-                app_instance.root.after(1000, app_instance.root.destroy)
 
         # === 【修改点 2】：监听命令队列 ===
         def check_command_queue():

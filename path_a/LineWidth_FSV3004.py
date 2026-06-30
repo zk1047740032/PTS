@@ -891,6 +891,8 @@ class LineWidth_FSV3004_GUI:
                 # 恢复按钮状态
                 self.root.after(0, lambda: self.start_btn.config(state=tk.NORMAL))
                 self.root.after(0, lambda: self.stop_btn.config(state=tk.DISABLED))
+                # 一键测试模式：自动关闭窗口，触发进程退出
+                self.root.after(3000, self.root.destroy)
         
         self.worker = threading.Thread(target=task, daemon=True)
         self.worker.start()

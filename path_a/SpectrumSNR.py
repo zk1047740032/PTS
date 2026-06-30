@@ -395,6 +395,8 @@ class SpectrumSNRGUI:
         self.btn_start.config(state="normal", text="开始测试")
         self.btn_save.config(state="normal")
         self.log("[系统] 测试流程结束，仪器已释放。")
+        # 一键测试模式：自动关闭窗口，触发进程退出
+        self.root.after(2000, self.root.destroy)
 
     def show_image_popup(self, img_path, snr_value):
         # 注意：此函数由 root.after 调用，已经运行在主线程，可以安全操作 UI

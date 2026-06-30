@@ -330,6 +330,7 @@ class PowerGUI:
             usb_res = p["usb_resource"]
             if not usb_res:
                 self.log("未填写 USB 资源地址")
+                self.root.after(2000, self.root.destroy)
                 return
             try:
                 self.pm = PowerMeterController(resource=usb_res, log_func=self.log)
@@ -351,6 +352,9 @@ class PowerGUI:
             except Exception as e:
                 self.log(f"[线程异常] {e}")
                 self.log(f"采集失败: {e}")
+            finally:
+                # 一键测试模式：自动关闭窗口，触发进程退出
+                self.root.after(2000, self.root.destroy)
 
         thread = threading.Thread(target=target, daemon=True)
         thread.start()

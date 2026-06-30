@@ -356,6 +356,8 @@ class TimeDomainGUI:
             self.log(f"[错误] 测试失败：{e}")
         finally:
             td.close()
+            # 一键测试模式：自动关闭窗口，触发进程退出
+            self.root.after(2000, self.root.destroy)
 
     def show_image_popup(self, img_path):
         win = tk.Toplevel(self.root)

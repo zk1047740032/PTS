@@ -1158,6 +1158,8 @@ class SingleFrequencyGUI:
                     sa.close()
                 except Exception:
                     pass
+            # 一键测试模式：自动关闭窗口，触发进程退出
+            self.root.after(2000, self.root.destroy)
 
     def run(self):
         self.root.mainloop()

@@ -319,6 +319,8 @@ class PhaseNoiseGUI:
             self.log(f"[错误] 测试失败: {e}")
         finally:
             self.root.after(0, lambda: self.start_btn.config(state=tk.NORMAL))
+            # 一键测试模式：自动关闭窗口，触发进程退出
+            self.root.after(3000, self.root.destroy)
 
     def _interruptible_sleep(self, seconds: float, check_interval: float = 0.5) -> bool:
         """
