@@ -382,7 +382,15 @@ class IntegratedPlatform:
         right_panel = tk.Frame(main_frame, bg="white")
         right_panel.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
 
-        tk.Label(right_panel, text="运行状态监控", font=("微软雅黑", 12), bg="white").pack(anchor="w", padx=10, pady=10)
+        # 运行状态监控标题行（含种子参数按钮）
+        monitor_header = tk.Frame(right_panel, bg="white")
+        monitor_header.pack(fill=tk.X, padx=10, pady=10)
+
+        tk.Label(monitor_header, text="运行状态监控", font=("微软雅黑", 12), bg="white").pack(side=tk.LEFT)
+
+        self.btn_seed_params = ttk.Button(monitor_header, text="种子参数",
+                                          command=self.show_seed_params, width=10, cursor="hand2")
+        self.btn_seed_params.pack(side=tk.RIGHT)
         
         self.progress = ttk.Progressbar(right_panel, mode='determinate')
         self.progress.pack(fill=tk.X, padx=10)
@@ -578,6 +586,46 @@ class IntegratedPlatform:
         close_button = ttk.Button(help_window, text="关闭", 
                                command=help_window.destroy, width=10, cursor="hand2")
         close_button.pack(pady=10)
+
+    def show_seed_params(self):
+        """
+        显示种子参数查询窗口
+
+        功能:
+            - 创建一个新的窗口显示种子激光器参数查询界面
+            - 用户配置串口号和地址后，点击查询按钮单次查询参数
+        """
+        from seed_value import SeedParamsPanel
+
+        seed_window = tk.Toplevel(self.root)
+        seed_window.title("种子参数")
+        seed_window.geometry("710x630")
+        seed_window.resizable(True, True)
+
+        # 嵌入查询面板
+        panel = SeedParamsPanel(seed_window)
+
+        # 底部按钮
+        bottom_frame = ttk.Frame(seed_window, padding=6)
+        bottom_frame.pack(fill=tk.X)
+
+        record_hint = tk.StringVar(value='')
+        hint_label = ttk.Label(bottom_frame, textvariable=record_hint,
+                               font=('', 8), foreground='gray')
+        hint_label.pack(side=tk.LEFT, padx=4)
+
+        def do_record():
+            panel.record_to_csv()
+            record_hint.set('记录成功')
+            seed_window.after(3000, lambda: record_hint.set(''))
+
+        close_button = ttk.Button(bottom_frame, text="关闭",
+                                  command=seed_window.destroy, width=10, cursor="hand2")
+        close_button.pack(side=tk.RIGHT, padx=8)
+
+        record_btn = ttk.Button(bottom_frame, text="记录",
+                                command=do_record, width=10, cursor="hand2")
+        record_btn.pack(side=tk.RIGHT, padx=4)
 
     def start_module_process(self, name, auto_start=False):
         """
