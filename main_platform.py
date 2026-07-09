@@ -164,23 +164,23 @@ def run_module_process(module_name, start_method, msg_queue, cmd_queue):
 # 配置定义 (保持不变)
 # ==========================================
 MODULE_MAP = {
-    "Rin_FSV3004": {"start_method": "start_rin", "group": "ch1"},
-    "线宽_FSV3004": {"start_method": "start_measurement", "group": "ch1"},
-    "时域": {"start_method": "start_test", "group": "ch1"},
-    "信噪比": {"start_method": "start_test", "group": "ch1"},
-    "单频": {"start_method": "start", "group": "ch3"},
-    "功率": {"start_method": "start_collect", "group": "ch1"},
-    "PZT调制": {"start_method": "start_test", "group": "qijian"},
+    "Rin_FSV3004": {"start_method": "start_rin", "group": "ch3"},
+    "线宽_FSV3004": {"start_method": "start_measurement", "group": "ch3"},
+    "时域": {"start_method": "start_test", "group": "ch3"},
+    "信噪比": {"start_method": "start_test", "group": "ch3"},
+    "单频": {"start_method": "start", "group": "ch1"},
+    "功率": {"start_method": "start_collect", "group": "ch3"},
+    "PZT调制": {"start_method": "start_test", "group": "path_b"},
     "相噪": {"start_method": "start_test", "group": "ch2"},
 }
 
 MODULE_GROUPS = {
     "光路A": {
-        "通道1": [name for name, info in MODULE_MAP.items() if info["group"] == "ch1"],
+        "通道3": [name for name, info in MODULE_MAP.items() if info["group"] == "ch3"],
         "通道2": [name for name, info in MODULE_MAP.items() if info["group"] == "ch2"],
-        "通道3": [name for name, info in MODULE_MAP.items() if info["group"] == "ch3"]
+        "通道1": [name for name, info in MODULE_MAP.items() if info["group"] == "ch1"]
     },
-    "光路B": [name for name, info in MODULE_MAP.items() if info["group"] == "qijian"],
+    "光路B": [name for name, info in MODULE_MAP.items() if info["group"] == "path_b"],
 }
 
 # ==========================================
@@ -655,14 +655,14 @@ class IntegratedPlatform:
         """
         一键测试：按通道顺序编排测试
 
-        光路A（ch1/ch2/ch3）通过光开关切换，需按通道顺序串行执行，
+        光路A（ch3/ch2/ch1）通过光开关切换，需按通道顺序串行执行，
         同一通道内的多个模块可并行运行。
-        光路B（qijian）不经过光开关，与光路A并行执行。
+        光路B不经过光开关，与光路A并行执行。
 
         执行流程:
-            1. 按 MODULE_MAP["group"] 将勾选项分为 ch1/ch2/ch3/qijian 四组
-            2. 立即启动 qijian（光路B）组，无需等待光开关
-            3. 后台线程按 ch1 → ch2 → ch3 顺序编排光路A：
+            1. 按 MODULE_MAP["group"] 将勾选项分为 ch3/ch2/ch1/光路B 四组
+            2. 立即启动 光路B组，无需等待光开关
+            3. 后台线程按 ch3 → ch2 → ch1 顺序编排光路A：
                 a. 切换光开关到目标通道
                 b. 等待稳定延时
                 c. 并行启动该通道所有模块
@@ -677,14 +677,14 @@ class IntegratedPlatform:
         self.log("SYSTEM", f"准备执行任务: {', '.join(selected)}")
 
         # 按 group 分组
-        channel_groups = {"ch1": [], "ch2": [], "ch3": [], "qijian": []}
+        channel_groups = {"ch3": [], "ch2": [], "ch1": [], "path_b": []}
         for name in selected:
             group = MODULE_MAP[name]["group"]
             if group in channel_groups:
                 channel_groups[group].append(name)
 
-        # 光路B（qijian）：立即启动，独立并行
-        for name in channel_groups.get("qijian", []):
+        # 光路B（path_b）：立即启动，独立并行
+        for name in channel_groups.get("path_b", []):
             if name in self.processes and self.processes[name].is_alive():
                 if name in self.cmd_queues:
                     self.cmd_queues[name].put("START")
@@ -697,8 +697,8 @@ class IntegratedPlatform:
                 self.start_module_process(name, auto_start=True)
             time.sleep(0.1)
 
-        # 光路A（ch1/ch2/ch3）：后台线程按通道顺序编排
-        channel_modules = {k: v for k, v in channel_groups.items() if k != "qijian"}
+        # 光路A（ch3/ch2/ch1）：后台线程按通道顺序编排
+        channel_modules = {k: v for k, v in channel_groups.items() if k != "path_b"}
         threading.Thread(
             target=self._orchestrate_channel_tests,
             args=(channel_modules,),
@@ -710,11 +710,11 @@ class IntegratedPlatform:
         按通道顺序编排光路A的测试（在后台线程中运行）
 
         Args:
-            channel_groups: {"ch1": [...], "ch2": [...], "ch3": [...]}
+            channel_groups: {"ch3": [...], "ch2": [...], "ch1": [...]}
         """
-        channel_map = {"ch1": 1, "ch2": 2, "ch3": 3}
+        channel_map = {"ch3": 3, "ch2": 2, "ch1": 1}
 
-        for group_key in ["ch1", "ch2", "ch3"]:
+        for group_key in ["ch3", "ch2", "ch1"]:
             modules = channel_groups.get(group_key, [])
             if not modules:
                 continue
@@ -861,7 +861,7 @@ class IntegratedPlatform:
                         break
                 
                 if sub_notebook:
-                    # 获取二级页签 (如 "通道1")
+                    # 获取二级页签 (如 "通道3")
                     sub_tab_id = sub_notebook.select()
                     if sub_tab_id:
                         sub_tab_text = sub_notebook.tab(sub_tab_id, "text").strip()

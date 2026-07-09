@@ -944,7 +944,7 @@ class RinGUI:
 
         # 默认参数（保留原脚本默认路径/IP）
         self.params = {
-            "osa_ip": "192.168.7.10",
+            "osa_ip": "192.168.7.20",
             #"osa_port": 5025,
             "save_path": r"C:\PTS\zhongzi\Rin\FSV3004",
             "dc_initial": 2.40
