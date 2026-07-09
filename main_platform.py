@@ -5,12 +5,10 @@ import os
 import sys
 import ctypes
 import threading
-import csv
 import time
 import traceback
 import multiprocessing
 from queue import Empty
-import docxtpl
 from path_a.LightSwitch import OpticalSwitch
 # ==========================================
 # 动态导入辅助函数
@@ -967,69 +965,10 @@ class IntegratedPlatform:
 
     def on_generate_report(self):
         """点击生成报告的逻辑"""
-        
-        # 组装数据字典 (键名必须与 Word 模板中的 {{ 变量名 }} 完全一致)
-        report_data = {
-            # 项目数据
-            "text_date": time.strftime("%Y/%m/%d"),
+        # 数据采集已抽至 report.data_collector 模块
+        from report.data_collector import assemble_report_data
+        report_data = assemble_report_data()
 
-            # Fig.1 相对强度噪声（Rin）✅
-            "img_rin": r"C:\PTS\zhongzi\Rin\FSV3004\Rin.png",
-            "text_rin": (lambda: 
-                (lambda f: float(next(csv.reader(f))[0]) if f else "未读取到积分数据")(
-                    open(r"C:\PTS\zhongzi\Rin\FSV3004\rin_figure2_max.csv", 'r', encoding='utf-8') if os.path.exists(r"C:\PTS\zhongzi\Rin\FSV3004\rin_figure2_max.csv") else None
-                )
-            )(),
-
-            # Fig.2 PZT（波长计）
-            "img_PZT": r"C:\PTS\zhongzi\WaveLength\10v.png",
-            "text_PZT_range": (lambda:
-                (lambda f: float(list(csv.reader(f))[1][2]) if f else "未读取到PZT数据")(
-                    open(r"C:\PTS\zhongzi\WaveLength\PZT_range.csv", "r", encoding='utf-8') if os.path.exists(r"C:\PTS\zhongzi\WaveLength\PZT_range.csv") else None
-                )
-            )(),
-            "text_center_wavelength": (lambda:
-                (lambda f: int(next(csv.reader(f))[0]) if f else "未读取到波长数据")(
-                    open(r"C:\PTS\zhongzi\WaveLength\wavelength.csv", "r", encoding='utf-8') if os.path.exists(r"C:\PTS\zhongzi\WaveLength\wavelength.csv") else None
-                )
-            )(),
-
-            # Fig.3 光谱信噪比 ✅
-            "img_spectrumSNR": r"C:\PTS\zhongzi\SpectrumSNR\spectrum.bmp",
-            "text_SNR": (lambda:
-                (lambda f: float(next(csv.reader(f))[0]) if f else "未读取到SNR数据")(
-                    open(r"C:\PTS\zhongzi\SpectrumSNR\spectrum_snr.csv", "r", encoding='utf-8') if os.path.exists(r"C:\PTS\zhongzi\SpectrumSNR\spectrum_snr.csv") else None
-                )
-            )(),
-
-            # Fig.4 线宽
-            "img_linewidth": r"C:\PTS\zhongzi\LineWidth\image_1000.png", # ✅
-            "text_linewidth": (lambda: # 这里错了，要的是除了2倍根号99后的结果
-                (lambda f: float(list(csv.reader(f))[4][0]) if f else "未读取到Ndbdown数据")(
-                    open(r"C:\PTS\zhongzi\LineWidth\ndbdown.csv", "r", encoding='utf-8') if os.path.exists(r"C:\PTS\zhongzi\LineWidth\ndbdown.csv") else None
-                )
-            )(),
-
-            # Fig.5 偏振测试
-            "img_polarization": r"暂无",
-
-            # 输出功率 ✅
-            "text_power": (lambda: 
-                (lambda f: float(next(csv.reader(f))[0]) if f else "未读取到功率数据")(
-                    open(r"C:\PTS\zhongzi\Power\power.csv", 'r', encoding='utf-8') if os.path.exists(r"C:\PTS\zhongzi\Power\power.csv") else None
-                )
-            )(),
-
-            # 功率稳定性
-            "img_power_stability": "烤机数据画图",
-            "text_RMS": (lambda: 
-                (lambda f: float(list(csv.reader(f))[1][1]) if f else "未读取到RMS数据")(
-                    open(r"C:\PTS\zhongzi\Power\burnin_result.csv", 'r', encoding='utf-8') if os.path.exists(r"C:\PTS\zhongzi\Power\burnin_result.csv") else None
-                )
-            )(),
-            "text_P2P": "读取整列数据 （最大值-最小值）/平均值",
-        }
-        
         # 指定模板和输出路径
         if getattr(sys, 'frozen', False):
             base_path = sys._MEIPASS
@@ -1038,19 +977,16 @@ class IntegratedPlatform:
         template_path = os.path.join(base_path, "report", "templates", "template_default.docx")
         save_dir = r"C:\PTS\report"
         os.makedirs(save_dir, exist_ok=True)
-        #current_sn = "TEST"  # 默认测试序列号
         output_path = os.path.join(save_dir, f"测试报告_{time.strftime('%Y%m%d_%H%M%S')}.docx")
 
         import threading
         def _generate_task():
             try:
                 self.btn_report.config(state="disabled", text="生成中...")
-                
-                # 【严格按照目录结构导入】
+
                 from report.template_generator import generate_report
                 generate_report(template_path, output_path, report_data)
-                
-                #self.root.after(0, lambda: messagebox.showinfo("成功", f"报告生成完毕！\n路径: {output_path}"))
+
                 self.root.after(0, lambda: self.log("SYSTEM", f"{output_path}", "completed", file_path=output_path))
             except Exception as e:
                 self.root.after(0, lambda e=e: messagebox.showerror("错误", f"报告生成失败:\n{str(e)}"))
