@@ -45,7 +45,7 @@ def _get_waverange():
     """
     wavelength = _read_csv_cell(
         r"C:\PTS\zhongzi\SeedValue\seedvalue.csv",
-        row_idx=1, col_idx=4, cast=float, fallback="未读取到电流数据",
+        row_idx=1, col_idx=4, cast=float, fallback="(未读取到电流数据)",
     )
     if wavelength < 1200: return f"{wavelength-0.35:.2f} ~ {wavelength+0.35:.2f}"
     else: return f"{wavelength-0.5:.2f} ~ {wavelength+0.5:.2f}"
@@ -76,7 +76,7 @@ def assemble_report_data():
         # ---- 测试数据 ----
         "text_current": _read_csv_cell(
             r"C:\PTS\zhongzi\SeedValue\seedvalue.csv",
-            row_idx=1, col_idx=8, cast=float, fallback="未读取到电流数据",
+            row_idx=1, col_idx=8, cast=float, fallback="(未读取到电流数据)",
         ),
 
         "text_temp": f"{_read_csv_cell(
@@ -86,12 +86,12 @@ def assemble_report_data():
 
         "temp_min": _read_csv_cell(
             r"C:\PTS\zhongzi\SeedValue\seedvalue.csv",
-            row_idx=1, col_idx=1, cast=float, fallback="未读取到温度下限",
+            row_idx=1, col_idx=1, cast=float, fallback="(未读取到温度下限)",
         ),
 
         "temp_max": _read_csv_cell(
             r"C:\PTS\zhongzi\SeedValue\seedvalue.csv",
-            row_idx=1, col_idx=0, cast=float, fallback="未读取到温度上限",
+            row_idx=1, col_idx=0, cast=float, fallback="(未读取到温度上限)",
         ),
 
         "text_waverange": _get_waverange(),
@@ -103,32 +103,32 @@ def assemble_report_data():
         "img_rin": r"C:\PTS\zhongzi\Rin\FSV3004\Rin.png",
         "text_rin": _read_csv_cell(
             r"C:\PTS\zhongzi\Rin\FSV3004\rin_figure2_max.csv",
-            row_idx=0, col_idx=0, cast=float, fallback="未读取到积分数据",
+            row_idx=0, col_idx=0, cast=float, fallback="(未读取到积分数据)",
         ),
 
         # ---- Fig.2 PZT（波长计） ----
         "img_PZT": r"C:\PTS\zhongzi\WaveLength\10v.png",
         "text_PZT_range": _read_csv_cell(
             r"C:\PTS\zhongzi\WaveLength\PZT_range.csv",
-            row_idx=1, col_idx=2, cast=float, fallback="未读取到PZT数据",
+            row_idx=1, col_idx=2, cast=float, fallback="(未读取到PZT数据)",
         ),
         "text_center_wavelength": _read_csv_cell(
             r"C:\PTS\zhongzi\WaveLength\wavelength.csv",
-            row_idx=0, col_idx=0, cast=int, fallback="未读取到波长数据",
+            row_idx=0, col_idx=0, cast=int, fallback="(未读取到波长数据)",
         ),
 
         # ---- Fig.3 光谱信噪比 ----
         "img_spectrumSNR": r"C:\PTS\zhongzi\SpectrumSNR\spectrum.bmp",
         "text_SNR": _read_csv_cell(
             r"C:\PTS\zhongzi\SpectrumSNR\spectrum_snr.csv",
-            row_idx=0, col_idx=0, cast=float, fallback="未读取到SNR数据",
+            row_idx=0, col_idx=0, cast=float, fallback="(未读取到SNR数据)",
         ),
 
         # ---- Fig.4 线宽 ----
         "img_linewidth": r"C:\PTS\zhongzi\LineWidth\image_1000.png",
         "text_linewidth": _read_csv_cell(
             r"C:\PTS\zhongzi\LineWidth\ndbdown.csv",
-            row_idx=4, col_idx=0, cast=float, fallback="未读取到Ndbdown数据",
+            row_idx=4, col_idx=0, cast=float, fallback="(未读取到Ndbdown数据)",
         ),
 
         # ---- Fig.5 偏振测试 ----
@@ -137,14 +137,14 @@ def assemble_report_data():
         # ---- 输出功率 ----
         "text_power": _read_csv_cell(
             r"C:\PTS\zhongzi\Power\power.csv",
-            row_idx=0, col_idx=0, cast=float, fallback="未读取到功率数据",
+            row_idx=0, col_idx=0, cast=float, fallback="(未读取到功率数据)",
         ),
 
         # ---- 功率稳定性 ----
         "img_power_stability": "烤机数据画图",
         "text_RMS": _read_csv_cell(
             r"C:\PTS\zhongzi\Power\burnin_result.csv",
-            row_idx=1, col_idx=1, cast=float, fallback="未读取到RMS数据",
+            row_idx=1, col_idx=1, cast=float, fallback="(未读取到RMS数据)",
         ),
         "text_P2P": "读取整列数据 （最大值-最小值）/平均值",
     }

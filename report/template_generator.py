@@ -12,11 +12,15 @@ def generate_report(template_path, output_path, data_dict):
     doc = DocxTemplate(template_path)
     context = {}
 
+    IMG_SIZES = {
+        "img_spectrumSNR": (Mm(145), Mm(100)),
+    }
+    DEFAULT_IMG_SIZE = (Mm(145), Mm(87))
+
     for key, value in data_dict.items():
-        # 如果键名以 img_ 开头，且值是一个存在的本地路径，则作为图片插入
         if key.startswith('img_') and isinstance(value, str) and os.path.exists(value):
-            # width=Mm(150), height=Mm(80) 设置图片宽度和高度（会变形）
-            context[key] = InlineImage(doc, value, width=Mm(145), height=Mm(87))
+            w, h = IMG_SIZES.get(key, DEFAULT_IMG_SIZE)
+            context[key] = InlineImage(doc, value, width=w, height=h)
         else:
             # 图片不存在或者是普通文本，直接填入
             if key.startswith('img_') and not os.path.exists(value):

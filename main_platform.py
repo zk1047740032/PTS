@@ -190,44 +190,6 @@ CHANNEL_SWITCH_DELAY = 1.5  # 切换通道后稳定延时（秒）
 class IntegratedPlatform:
     """
     集成测试平台主类
-    
-    主要功能和用途:
-        - 提供统一的测试项目选择界面，支持多模块并行测试
-        - 管理各个测试模块的进程生命周期
-        - 监控测试执行状态并记录日志
-        - 提供一键测试功能，实现自动化测试流程
-        - 支持测试项的全选/清空操作
-    
-    核心设计理念:
-        - 采用多进程架构，每个测试模块运行在独立进程中，提高系统稳定性
-        - 使用队列进行进程间通信，实现命令下发和状态上报
-        - 模块化设计，通过配置文件定义测试模块，便于扩展
-        - 响应式UI设计，提供直观的操作界面和实时状态反馈
-    
-    关键特性:
-        - 支持多模块并行测试，提高测试效率
-        - 实时日志记录和状态监控
-        - 自动清理资源，确保进程安全退出
-        - 容错处理，当命令队列异常时自动重启进程
-        - 支持测试项的双击快速打开功能
-    
-    使用场景:
-        - 实验室环境下的多设备并行测试
-        - 自动化测试流程中的集中控制
-        - 需要实时监控测试状态的场景
-        - 对测试结果有详细记录需求的场合
-    
-    限制条件:
-        - 依赖Tkinter GUI库，仅支持桌面环境
-        - 测试模块必须符合特定的接口规范
-        - 进程间通信依赖multiprocessing.Queue，受系统资源限制
-        - 并发测试数量受系统硬件资源限制
-    
-    与其他类或模块的主要交互关系:
-        - 与各测试模块的GUI类交互，通过进程启动和命令队列控制测试执行
-        - 与user_guide模块交互，显示操作说明文档
-        - 与run_module_process函数交互，启动和管理测试进程
-        - 通过MODULE_MAP和MODULE_GROUPS配置定义测试模块信息
     """
     def __init__(self, root):
         """
@@ -576,7 +538,7 @@ class IntegratedPlatform:
         scrollbar.config(command=help_text.yview)
         
         # 插入说明文本 - 从独立文件引入
-        from user_guide import USER_GUIDE
+        from utils.user_guide import USER_GUIDE
         help_text.insert(tk.END, USER_GUIDE)
         help_text.config(state=tk.DISABLED)  # 设置为只读
         
@@ -593,7 +555,7 @@ class IntegratedPlatform:
             - 创建一个新的窗口显示种子激光器参数查询界面
             - 用户配置串口号和地址后，点击查询按钮单次查询参数
         """
-        from seed_value import SeedParamsPanel
+        from utils.seed_value import SeedParamsPanel
 
         seed_window = tk.Toplevel(self.root)
         seed_window.title("种子参数")
