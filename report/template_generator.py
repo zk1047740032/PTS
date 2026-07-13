@@ -13,7 +13,8 @@ def generate_report(template_path, output_path, data_dict):
     context = {}
 
     IMG_SIZES = {
-        "img_spectrumSNR": (Mm(145), Mm(100)),
+        "img_spectrumSNR": (Mm(135), Mm(95)),
+        "img_linewidth": (Mm(140), Mm(82))
     }
     DEFAULT_IMG_SIZE = (Mm(145), Mm(87))
 

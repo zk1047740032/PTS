@@ -114,7 +114,7 @@ def assemble_report_data():
         ),
         "text_center_wavelength": _read_csv_cell(
             r"C:\PTS\zhongzi\WaveLength\wavelength.csv",
-            row_idx=0, col_idx=0, cast=int, fallback="(未读取到波长数据)",
+            row_idx=0, col_idx=0, cast=float, fallback="(未读取到波长数据)",
         ),
 
         # ---- Fig.3 光谱信噪比 ----

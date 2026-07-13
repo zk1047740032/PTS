@@ -632,7 +632,7 @@ class SingleFrequencyGUI:
         if parent is None:
             self.root = tk.Tk()
             self.root.title("单频")
-            self.root.geometry("1270x950")
+            self.root.geometry("1320x950")
             self.root.resizable(True, True)
         else:
             self.root = parent
