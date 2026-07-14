@@ -9,7 +9,7 @@ import time
 import traceback
 import multiprocessing
 from queue import Empty
-from path_a.LightSwitch import OpticalSwitch
+from utils.LightSwitch import OpticalSwitch
 # ==========================================
 # 动态导入辅助函数
 # ==========================================

@@ -60,9 +60,9 @@
 | 文件 | 控制器类 | GUI 类 | 状态 | 备注 |
 |------|---------|--------|------|------|
 | path_a/Rin_FSV3004.py | RinAnalyzer, BackgroundNoiseAnalyzer | RinGUI | done | TestRunner 保留未套模板；stop_flag 保持 bool |
-| path_a/Power.py | PowerMeterController | PowerGUI | todo | 有 PowerCollector + burnin 计算，逻辑较多 |
-| path_a/PhaseNoise.py | (无仪器,用 pywinauto) | PhaseNoiseGUI | todo | click_button 模块级函数；无 VISA，只用 BaseTestGUI |
-| path_a/LightSwitch.py | OpticalSwitch | (无GUI) | todo | USB VISA；kind="usb" 透传；无 GUI 层 |
+| path_a/Power.py | PowerMeterController | PowerGUI | done | PowerCollector/burnin 纯计算保留；connect 保留子类实现不设终止符 |
+| path_a/PhaseNoise.py | (无仪器,用 pywinauto) | PhaseNoiseGUI | done | click_button 模块级函数；无 VISA，只用 BaseTestGUI；start_test 保留自定义 |
+| path_a/LightSwitch.py | OpticalSwitch | (无GUI) | done | USB VISA 完整地址透传；connect 传 idn=False 后用 get_channel 自行验证(零行为变更) |
 | path_a/LineWidth_FSV3004.py | SignalGenerator, LinewidthTester | LineWidth_FSV3004_GUI | todo | **SignalGenerator 与 path_b 重复**，迁移后可消除 |
 | path_a/SingleFrequency.py | DFBLaserController(serial), SingleFrequency(VISA) | SingleFrequencyGUI | todo | DFB 是 serial 非 VISA，不继承 VisaInstrument；双线程编排 |
 | path_a/SpectrumSNR.py | SpectrumSNR | (GUI 在别处?) | todo | 需确认是否有 GUI 类 |
@@ -83,6 +83,8 @@
 | 截图临时路径透传，不用工具默认 | 仪器本地路径 `C:\PTS\Rin\_temp.png` 等是实测可用的，改路径有仪器侧风险 |
 | `TestRunner` 暂不继承 `BaseTestRunner` | 它对外暴露 `run_rin(ra,ui_root,ip)`/`run_background(...)`/`stop()` 固定签名被 GUI 带参调用，套模板需同时改两边 |
 | 日志从同步改为基类异步 `root.after` | 功能等价，后台线程更安全；文案/时间戳格式不变 |
+| `PowerMeterController.connect` 保留子类实现不调 `super().connect` | 原实现不设读/写终止符（只设 timeout）且失败抛异常（调用方 try/except）。基类 connect 会强制设 `\n` 终止符并吞异常返回 bool，会改变 USB 功率计通信行为与失败流程。故保留原 connect 体（内部直接用 `pyvisa`，需保留 `import pyvisa`），仅 `__init__` 走基类获取 rm/inst/log/timeout_ms。GUI 的 `list_visa_resources` 也直接用 pyvisa |
+| `OpticalSwitch.connect` 传 `idn=False` 后自行 `get_channel()` 验证 | 原版连接验证用 `:OSW1:CHAN?` 而非 `*IDN?`。基类 `idn` 参数只支持 `*IDN?`，故关闭基类 IDN 验证，由子类在 connect 成功后调 `get_channel()` 复刻原验证逻辑（含失败时 `super().close()` 与返回 False），保持零行为变更。USB 完整资源串直接透传 `super().__init__(address=...)`，不套 `visa_address()` |
 
 ---
 

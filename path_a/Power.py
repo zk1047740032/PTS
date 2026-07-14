@@ -9,10 +9,17 @@ import threading
 import csv
 import statistics
 from typing import Optional, Dict, Any
-import ctypes
 import pyvisa
 import tkinter as tk
 from tkinter import filedialog
+
+import sys, pathlib
+# 确保能 import core（脚本独立运行时不以包形式组织）
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
+from core import (
+    VisaInstrument,
+    BaseTestGUI,
+)
 
 # ===============  上位机控制（pywinauto）  ===============
 try:
@@ -22,21 +29,15 @@ try:
 except Exception:
     PYW_AVAILABLE = False
 
-# 启用DPI感知，解决高DPI屏幕下界面模糊问题
-if os.name == 'nt':
-    try:
-        # 设置进程DPI感知
-        ctypes.windll.shcore.SetProcessDpiAwareness(1)
-        # 获取系统DPI
-        dpi = ctypes.windll.user32.GetDpiForSystem()
-        # 设置缩放因子
-        scaling_factor = dpi / 96.0
-    except Exception:
-        scaling_factor = 1.0
-else:
-    scaling_factor = 1.0
+class PowerMeterController(VisaInstrument):
+    """
+    功率计控制器（继承 VisaInstrument，复用 ResourceManager/inst/close 等通用行为）。
 
-class PowerMeterController:
+    注意：本控制器的 connect() 与基类语义不同——原实现不设置读/写终止符且
+    连接失败时抛异常（调用方用 try/except 处理），故保留子类 connect() 原样，
+    不调用 super().connect()，以保证功率计通信行为与原版一致（零行为变更）。
+    self.resource 为业务字段，对应基类 self.address。
+    """
     def __init__(self, resource: str, log_func=print, timeout_ms: int = 5000):
         """
         Initialize a PowerMeterController.
@@ -50,14 +51,12 @@ class PowerMeterController:
         specified instrument resource when :meth:`connect` is called.  The
         instance is stored in ``self.inst`` for subsequent commands.
         """
-        self.rm = pyvisa.ResourceManager()
-        self.inst = None
-        self.resource = resource
-        self.log = log_func
-        self.timeout_ms = timeout_ms
+        super().__init__(log_func=log_func, address=resource, timeout_ms=timeout_ms)
+        self.resource = resource  # 业务字段，对应基类 self.address
 
     def connect(self):
         try:
+            self.rm = pyvisa.ResourceManager()
             self.inst = self.rm.open_resource(self.resource)
             self.inst.timeout = int(self.timeout_ms)
             self.log(f"[PM] 已连接: {self.resource}")
@@ -120,27 +119,27 @@ class PowerCollector:
         try:
             if not self.pm:
                 raise RuntimeError("未配置功率计 (PowerMeterController)")
-            
+
             power_w = self.pm.read_power()
             power_mw = float(power_w) * 1000
             timestamp = time.strftime('%Y-%m-%d %H:%M:%S')
-            
+
             self.log(f"[Collector] 读取功率: {power_w:.6f} W = {power_mw:.3f} mW")
-            
+
             if os.path.isdir(save_path) or save_path.endswith(os.sep):
                 out_dir = save_path
             else:
                 out_dir = os.path.dirname(save_path) or "."
-            
+
             os.makedirs(out_dir, exist_ok=True)
-            
+
             csv_filename = os.path.join(out_dir, f"power.csv")
-            
+
             with open(csv_filename, "w", newline="", encoding="utf-8") as f:
                 writer = csv.writer(f)
                 # writer.writerow(["Power_mW"])
                 writer.writerow([f"{power_mw:.2f}"])
-            
+
             self.log(f"[Collector] 数据已保存到: {csv_filename}")
             return True
         except Exception as e:
@@ -148,21 +147,14 @@ class PowerCollector:
             return False
 
 
-class PowerGUI:
+class PowerGUI(BaseTestGUI):
+    """
+    功率测量 GUI（继承 BaseTestGUI，复用窗口构造、线程安全日志(log)、
+    auto_close、run 等通用能力，子类保留自身布局与业务按钮）。
+    """
     def __init__(self, parent=None):
-        self.parent = parent
-        
-        if parent is None:
-            self.root = tk.Tk()
-            self.root.title("功率")
-            self.root.geometry("1275x510")
-            self.root.resizable(True, True)
-            try:
-                self.root.iconbitmap(r'PreciLasers.ico')
-            except:
-                pass
-        else:
-            self.root = parent
+        super().__init__(parent, title="功率",
+                         geometry="1275x510", icon="PreciLasers.ico")
 
         self.params = {
             "usb_resource": "",
@@ -185,10 +177,10 @@ class PowerGUI:
     def create_widgets(self):
         main_container = tk.Frame(self.root)
         main_container.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
-        
+
         left_container = tk.Frame(main_container)
         left_container.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 5))
-        
+
         param_frame = tk.LabelFrame(left_container, text="功率读取", padx=4, pady=8)
         param_frame.pack(fill=tk.X, expand=False)
 
@@ -265,22 +257,14 @@ class PowerGUI:
         ent.grid(row=row, column=1, padx=4, pady=4)
         self.entries[key] = ent
         if browse == "file":
-            tk.Button(parent, text="浏览", command=lambda k=key: self.browse_file(k), 
+            tk.Button(parent, text="浏览", command=lambda k=key: self.browse_file(k),
                      bg="#F0F0F0", fg="#000000", width=4, height=1, relief="flat", cursor="hand2").grid(row=row, column=2, padx=0, pady=2)
         if browse == "dir":
-            tk.Button(parent, text="浏览", command=lambda k=key: self.browse_dir(k), 
+            tk.Button(parent, text="浏览", command=lambda k=key: self.browse_dir(k),
                      bg="#F0F0F0", fg="#000000", width=4, height=0, relief="flat", cursor="hand2").grid(row=row, column=2, padx=0, pady=2)
         return ent
 
-    def log(self, msg: str):
-        t = time.strftime("[%H:%M:%S]")
-        try:
-            self.log_box.insert(tk.END, f"{t} {msg}\n")
-            self.log_box.see(tk.END)
-            self.root.update_idletasks()
-        except Exception:
-            pass
-        print(f"{t} {msg}")
+    # log() 复用基类 BaseTestGUI.log（线程安全，root.after 异步写入 log_box）
 
     def browse_file(self, param_key: str):
         filename = filedialog.askopenfilename(title="选择文件", filetypes=[("所有文件", "*.*")])
@@ -325,12 +309,12 @@ class PowerGUI:
 
     def start_collect(self):
         p = self.get_params()
-        
+
         if not self.pm:
             usb_res = p["usb_resource"]
             if not usb_res:
                 self.log("未填写 USB 资源地址")
-                self.root.after(2000, self.root.destroy)
+                self.auto_close(2000)
                 return
             try:
                 self.pm = PowerMeterController(resource=usb_res, log_func=self.log)
@@ -341,7 +325,7 @@ class PowerGUI:
                 return
 
         self.collector = PowerCollector(self.pm, log_func=self.log)
-        
+
         def target():
             try:
                 success = self.collector.collect_and_save(p["save_path"])
@@ -354,7 +338,7 @@ class PowerGUI:
                 self.log(f"采集失败: {e}")
             finally:
                 # 一键测试模式：自动关闭窗口，触发进程退出
-                self.root.after(2000, self.root.destroy)
+                self.auto_close(2000)
 
         thread = threading.Thread(target=target, daemon=True)
         thread.start()
@@ -385,11 +369,11 @@ class PowerGUI:
             power_values = []
             with open(burnin_data, 'r', encoding='utf-8') as f:
                 reader = csv.reader(f)
-                
+
                 # 跳过前14行，第15行是表头
                 for _ in range(14):
                     next(reader, None)
-                
+
                 headers = next(reader, None)  # 读取第15行的表头
 
                 # 查找Power列的索引
@@ -459,9 +443,7 @@ class PowerGUI:
         except Exception as e:
             self.log(f"[烤机计算] 处理失败: {e}")
 
-    def run(self):
-        if self.root.winfo_exists():
-            self.root.mainloop()
+    # run() 复用基类 BaseTestGUI.run（启动 mainloop）
 
 
 if __name__ == "__main__":

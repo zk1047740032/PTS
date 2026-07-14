@@ -17,17 +17,11 @@ import tkinter as tk
 from tkinter import messagebox, filedialog
 from typing import Optional
 from pywinauto import Desktop
-import ctypes
 
-if os.name == 'nt':
-    try:
-        ctypes.windll.shcore.SetProcessDpiAwareness(1)
-        dpi = ctypes.windll.user32.GetDpiForSystem()
-        scaling_factor = dpi / 96.0
-    except Exception:
-        scaling_factor = 1.0
-else:
-    scaling_factor = 1.0
+import sys, pathlib
+# 确保能 import core（脚本独立运行时不以包形式组织）
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
+from core import BaseTestGUI
 
 
 def click_button():
@@ -68,9 +62,13 @@ def click_button():
         return False
 
 
-class PhaseNoiseGUI:
+class PhaseNoiseGUI(BaseTestGUI):
     """
     相位噪声测试GUI控制类
+
+    继承 BaseTestGUI：复用窗口构造、线程安全日志(log)、self.worker/self.stop_flag、
+    interruptible_sleep、auto_close、run 等通用能力。本程序无 VISA 仪器，
+    仅靠 pywinauto 点击上位机按钮，故只用 GUI 基类，不用 VisaInstrument。
 
     提供图形化界面用于配置测试参数、控制测试流程、显示运行日志。
     支持根据种子波长自动选择对应的程序进行测试。
@@ -83,26 +81,12 @@ class PhaseNoiseGUI:
         参数:
             parent (tk.Widget, optional): 父控件。若为None则创建独立窗口。
         """
-        self.parent = parent
-
-        if parent is None:
-            self.root = tk.Tk()
-            self.root.title("PhaseNoise")
-            self.root.geometry("1140x420")
-            self.root.resizable(True, True)
-            try:
-                self.root.iconbitmap("PreciLasers.ico")
-            except Exception:
-                pass
-        else:
-            self.root = parent
+        super().__init__(parent, title="PhaseNoise",
+                         geometry="1140x420", icon="PreciLasers.ico")
 
         self.wavelength_path = tk.StringVar(value=r"C:\PTS\zhongzi\WaveLength\wavelength.csv")
         self.program_1um = tk.StringVar(value="")
         self.program_1_5um = tk.StringVar(value="")
-
-        self.worker: Optional[threading.Thread] = None
-        self.stop_flag = threading.Event()
 
         self._build_ui()
 
@@ -189,25 +173,7 @@ class PhaseNoiseGUI:
         if filename:
             var.set(filename)
 
-    def log(self, msg: str) -> None:
-        """
-        线程安全地输出日志信息
-
-        参数:
-            msg (str): 日志消息
-        """
-        t = time.strftime("[%H:%M:%S]")
-        self.root.after(0, lambda: self._safe_log_append(f"{t} {msg}\n"))
-
-    def _safe_log_append(self, text: str) -> None:
-        """
-        线程安全地向日志文本框追加内容
-
-        参数:
-            text (str): 日志文本
-        """
-        self.log_box.insert(tk.END, text)
-        self.log_box.see(tk.END)
+    # log() 复用基类 BaseTestGUI.log（线程安全，root.after 异步写入 log_box）
 
     def _read_wavelength(self) -> Optional[float]:
         """
@@ -300,7 +266,7 @@ class PhaseNoiseGUI:
             max_retries = 3
             retry_count = 0
             click_success = False
-            
+
             while retry_count < max_retries and not click_success:
                 if retry_count > 0:
                     self.log(f"[重试] 第 {retry_count} 次重试点击操作...")
@@ -309,7 +275,7 @@ class PhaseNoiseGUI:
                     click_success = True
                 else:
                     retry_count += 1
-            
+
             if click_success:
                 self.log("[成功] 点击操作成功完成")
             else:
@@ -320,11 +286,11 @@ class PhaseNoiseGUI:
         finally:
             self.root.after(0, lambda: self.start_btn.config(state=tk.NORMAL))
             # 一键测试模式：自动关闭窗口，触发进程退出
-            self.root.after(3000, self.root.destroy)
+            self.auto_close(3000)
 
     def _interruptible_sleep(self, seconds: float, check_interval: float = 0.5) -> bool:
         """
-        可中断的睡眠
+        可中断的睡眠（转调基类 interruptible_sleep，行为与原实现一致）
 
         参数:
             seconds: 总睡眠时间（秒）
@@ -333,21 +299,10 @@ class PhaseNoiseGUI:
         返回:
             bool: True表示正常完成，False表示被中断
         """
-        elapsed = 0.0
-        while elapsed < seconds:
-            if self.stop_flag.is_set():
-                return False
-            sleep_time = min(check_interval, seconds - elapsed)
-            time.sleep(sleep_time)
-            elapsed += sleep_time
-        return True
+        return self.interruptible_sleep(seconds, check_interval)
 
-    def run(self) -> None:
-        """
-        以独立窗口模式运行
-        """
-        if self.root.winfo_exists():
-            self.root.mainloop()
+    # run() 复用基类 BaseTestGUI.run（启动 mainloop）
+
 
 if __name__ == "__main__":
     gui = PhaseNoiseGUI()
