@@ -7,8 +7,6 @@ import csv  # CSV文件读写
 import threading  # 多线程支持
 import traceback  # 异常追踪
 from typing import List, Optional, Any, Dict  # 类型注解
-import ctypes  # Windows系统调用
-import pyvisa  # 仪器通信库
 import numpy as np  # 数值计算
 import matplotlib  # 绘图库
 matplotlib.use('TkAgg')  # 设置matplotlib后端为TkAgg
@@ -19,34 +17,30 @@ from tkinter import messagebox, filedialog, simpledialog  # Tkinter对话框
 from PIL import Image, ImageTk  # 图片处理
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg  # matplotlib与tkinter集成
 
-# 启用DPI感知，解决高DPI屏幕下界面模糊问题
-if os.name == 'nt':
-    try:
-        # 设置进程DPI感知
-        ctypes.windll.shcore.SetProcessDpiAwareness(1)
-        # 获取系统DPI
-        dpi = ctypes.windll.user32.GetDpiForSystem()
-        # 设置缩放因子
-        scaling_factor = dpi / 96.0
-    except Exception:
-        scaling_factor = 1.0
-else:
-    scaling_factor = 1.0
+import sys, pathlib
+# 确保能 import core（脚本独立运行时不以包形式组织）
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
+from core import (
+    VisaInstrument,
+    BaseTestGUI,
+    visa_address,
+    clear_directory,
+    append_row_csv,
+    write_xy_csv,
+    read_instrument_screenshot,
+)
 
-# -------------------------
-# Helpers
-# -------------------------
-
+# default_logger 保留以兼容历史调用点；新代码直接用 print 或基类 log
 def default_logger(msg: str):
     """
     默认日志函数，将消息打印到控制台
-    
+
     参数:
         msg (str): 要打印的日志消息
     """
     print(msg)
 
-class RinAnalyzer:
+class RinAnalyzer(VisaInstrument):
     """
     RIN (Relative Intensity Noise) 分析仪类
     
@@ -75,8 +69,8 @@ class RinAnalyzer:
     - compute_rin_power(): 计算RIN功率积分
     """
     def __init__(self, log_func=default_logger):
-        self.rm = None
-        self.instrument = None
+        super().__init__(log_func=log_func, timeout_ms=60000)
+        self.instrument = None  # self.inst 的业务别名，供 configure_instrument/measure_segment 等沿用旧引用
         self.dc_value = 1.20  # 默认DC值
         self.amplification = 14
         self.file_paths = [
@@ -93,11 +87,11 @@ class RinAnalyzer:
         self.ddx = []
         self.ddy = []
         self.RIN_power = []
+        # 注意：本类用 bool 停止标志（TestRunner 直接真值判断 ra.stop_flag），
+        # 覆盖基类的 threading.Event，保持与原逻辑一致
         self.stop_flag = False
         self.stop_window = None
 
-        # logging
-        self.log = log_func
         # 仪器IP地址
         self.ip_address = "192.168.7.10"
 
@@ -111,18 +105,12 @@ class RinAnalyzer:
         返回:
             bool: 连接成功返回True，失败返回False
         """
-        try:
-            self.ip_address = ip_address
-            self.rm = pyvisa.ResourceManager()
-            self.instrument = self.rm.open_resource(f"TCPIP0::{ip_address}::inst0::INSTR")
-            self.instrument.timeout = 60000
-            self.instrument.read_termination = '\n'
-            self.instrument.write_termination = '\n'
+        self.ip_address = ip_address
+        ok = super().connect(visa_address(ip_address, kind="inst0"), idn=False)
+        if ok:
+            self.instrument = self.inst  # 别名指向同一资源对象
             self.log("成功连接到频谱分析仪（VXI-11）")
-            return True
-        except Exception as e:
-            self.log(f"连接失败: {e}")
-            return False
+        return ok
 
     def configure_instrument(self):
         """
@@ -512,45 +500,35 @@ class RinAnalyzer:
 
     def close(self):
         """
-        关闭仪器连接和资源
-        清理VISA资源管理器和仪器连接
+        关闭仪器连接和资源（复用 VisaInstrument.close，并清理 instrument 别名）
         """
-        if self.instrument:
-            try:
-                self.instrument.close()
-            except Exception:
-                pass
-        if self.rm:
-            try:
-                self.rm.close()
-            except Exception:
-                pass
+        super().close()
+        self.instrument = None
         self.log("已关闭仪器连接")
 
-class BackgroundNoiseAnalyzer:
+class BackgroundNoiseAnalyzer(VisaInstrument):
     """
     背景噪声分析仪类
-    
+
     功能：
     - 连接和控制频谱分析仪进行背景噪声测量
     - 执行底噪和种子光测量
     - 截图并保存测量数据
     - 显示测量结果和截图
-    
+
     主要属性：
-    - instrument: 频谱分析仪连接对象
+    - instrument: 频谱分析仪连接对象（self.inst 的业务别名）
     - ip_address: 仪器IP地址
     - log: 日志函数
-    
+
     主要方法：
     - connect(): 连接频谱分析仪
     - measure_and_screenshot(): 执行测量并截图
     - show_screenshot(): 显示截图和数据文件
     """
     def __init__(self, log_func=default_logger):
-        self.rm = None
-        self.instrument = None
-        self.log = log_func
+        super().__init__(log_func=log_func, timeout_ms=60000)
+        self.instrument = None  # self.inst 的业务别名
         # 仪器IP地址
         self.ip_address = "192.168.7.10"
 
@@ -564,18 +542,19 @@ class BackgroundNoiseAnalyzer:
         返回:
             bool: 连接成功返回True，失败返回False
         """
-        try:
-            self.ip_address = ip_address
-            self.rm = pyvisa.ResourceManager()
-            self.instrument = self.rm.open_resource(f"TCPIP0::{ip_address}::inst0::INSTR")
-            self.instrument.timeout = 60000
-            self.instrument.read_termination = '\n'
-            self.instrument.write_termination = '\n'
+        self.ip_address = ip_address
+        ok = super().connect(visa_address(ip_address, kind="inst0"), idn=False)
+        if ok:
+            self.instrument = self.inst  # 别名指向同一资源对象
             self.log("成功连接到频谱分析仪（VXI-11）")
-            return True
-        except Exception as e:
-            self.log(f"连接失败: {e}")
-            return False
+        return ok
+
+    def close(self):
+        """
+        关闭仪器连接并清理 instrument 别名（复用 VisaInstrument.close）。
+        """
+        super().close()
+        self.instrument = None
 
     def measure_and_screenshot(self, start_freq=10, stop_freq=100_000_000, bandwidth=30, avg_count=1, screenshot_name="BackgroundNoise_Screen.png", dat_filename="BackgroundNoise.DAT", is_seedlight=False):
         """
@@ -613,7 +592,7 @@ class BackgroundNoiseAnalyzer:
             self.instrument.write(":INIT:CONT OFF")  # 关闭连续模式
             self.instrument.write(":INIT")
             self.instrument.query("*OPC?")
-            
+
             # 根据类型显示不同的日志
             if is_seedlight:
                 self.log("种子光测量完成，开始截图和保存数据...")
@@ -627,25 +606,18 @@ class BackgroundNoiseAnalyzer:
             dest_dir = r"C:\PTS\zhongzi\Rin\FSV3004"
             os.makedirs(dest_dir, exist_ok=True)
             dat_path = os.path.join(dest_dir, dat_filename)
-            with open(dat_path, 'w', newline='') as f:
-                writer = csv.writer(f)
-                for freq, amp in zip(freqs, amps):
-                    writer.writerow([freq, amp])
+            write_xy_csv(dat_path, freqs, amps)  # 两列逐行写
             self.log(f"数据已保存到: {dat_path}")
 
             # 截图：先存仪器本地，再通过 SCPI 读回 PC（无需 SMB）
             self.instrument.timeout = 60000
-            self.instrument.write("HCOPy:DEVice:LANGuage PNG")
-            self.instrument.write("HCOPy:DEST 'MMEM'")
-            self.instrument.write(f"MMEM:NAME 'C:\\PTS\\Rin\\_temp.png'")
-            self.instrument.write("HCOPy:IMM")
-            self.instrument.query("*OPC?")
-            png_data = self.instrument.query_binary_values("MMEM:DATA? 'C:\\PTS\\Rin\\_temp.png'", datatype='B', container=bytearray)
-            self.instrument.write("MMEM:DEL 'C:\\PTS\\Rin\\_temp.png'")
             local_png = os.path.join(dest_dir, screenshot_name)
-            with open(local_png, 'wb') as f:
-                f.write(bytes(png_data))
-            self.log(f"截图已保存到: {local_png}")
+            read_instrument_screenshot(
+                self.instrument,
+                r"C:\PTS\Rin\_temp.png",  # 仪器本地临时路径（保持与原实现一致）
+                local_png,
+                log_func=self.log,
+            )
 
             # 显示截图（dest_path 用 PC 本地路径）
             self.show_screenshot(dest_dir, screenshot_name, dat_filename, is_seedlight)
@@ -789,17 +761,7 @@ class TestRunner:
 
                 # 电脑本地目录
                 local_dir = r"C:\PTS\zhongzi\Rin\FSV3004"
-                if os.path.exists(local_dir):
-                    for f in os.listdir(local_dir):
-                        fp = os.path.join(local_dir, f)
-                        try:
-                            if os.path.isfile(fp) or os.path.islink(fp):
-                                os.remove(fp)
-                            elif os.path.isdir(fp):
-                                import shutil
-                                shutil.rmtree(fp)
-                        except Exception as e:
-                            self.log(f"[警告] 删除 {fp} 失败: {e}")
+                clear_directory(local_dir, log_func=self.log)
 
                 self.log("[初始化] 文件夹清理完成。")
             except Exception as e:
@@ -881,15 +843,11 @@ class TestRunner:
                     screenshot_name = "BackgroundNoise_Screen.png"
                     dat_filename = "BackgroundNoise.DAT"
                 
-                bna.measure_and_screenshot(screenshot_name=screenshot_name, 
-                                          dat_filename=dat_filename, 
+                bna.measure_and_screenshot(screenshot_name=screenshot_name,
+                                          dat_filename=dat_filename,
                                           is_seedlight=is_seedlight)
                 try:
-                    bna.instrument.close()
-                except Exception:
-                    pass
-                try:
-                    bna.rm.close()
+                    bna.close()
                 except Exception:
                     pass
             else:
@@ -897,25 +855,29 @@ class TestRunner:
         except Exception as e:
             self.log(f"[Background Exception] {e}\n{traceback.format_exc()}")
 
-class RinGUI:
+class RinGUI(BaseTestGUI):
     """
     RIN测量图形用户界面类
-    
+
+    继承 BaseTestGUI：复用窗口构造、线程安全日志(log)、后台线程(start_worker)、
+    文件/目录浏览对话框、auto_close、run 等通用能力，子类只保留自身布局与业务按钮。
+
     功能：
     - 提供参数设置界面（IP地址、DC值、保存路径）
     - 控制测量任务（测RIN、测底噪、种子光）
     - 显示运行日志
     - 支持独立运行和集成模式
     - 提供文件重命名功能
-    
+
     主要属性：
-    - root: 主窗口或父容器
+    - root: 主窗口或父容器（来自基类）
+    - stop_flag: 停止事件（来自基类）
     - params: 参数字典
     - entries: 输入框字典
     - runner: 测试运行器
     - worker_thread: 工作线程
     - running_task: 当前运行任务标识
-    
+
     主要方法：
     - create_widgets(): 创建界面组件
     - start_rin/start_background/start_seedlight: 启动不同测量任务
@@ -924,23 +886,11 @@ class RinGUI:
     - rename_files: 重命名测量文件
     """
     def __init__(self, parent=None):
-        self.parent = parent
-        
-        # --- 核心修改：如果是集成模式，直接使用父控件作为 root ---
+        super().__init__(parent, title="Rin_FSV3004 - 独立模式",
+                         geometry="1170x630", icon="PreciLasers.ico")
+        # 独立模式下窗口居中（集成模式由父容器决定布局，不居中）
         if parent is None:
-            self.root = tk.Tk()
-            self.root.title("Rin_FSV3004 - 独立模式")
-            self.root.geometry("1170x630")
-            self.root.resizable(True, True)
-            try:
-                self.root.iconbitmap(r'PreciLasers.ico')
-            except:
-                pass
-            # 假设 set_center() 只有在独立模式下需要
-            if hasattr(self, 'set_center'):
-                self.set_center(1170, 330) 
-        else:
-            self.root = parent # <--- 修改点：直接使用父 Frame
+            self.set_center(1170, 330)
 
         # 默认参数（保留原脚本默认路径/IP）
         self.params = {
@@ -1052,23 +1002,7 @@ class RinGUI:
             tk.Button(parent, text="保存路径", command=lambda k=key: self.browse_savefile(k), cursor="hand2").grid(row=row, column=2, padx=4, pady=4)
         return ent
 
-    def log(self, msg: str):
-        """
-        日志记录函数
-        同时在GUI日志框和控制台输出消息
-        
-        参数:
-            msg (str): 日志消息
-        """
-        t = time.strftime("[%H:%M:%S]")
-        try:
-            self.log_box.insert(tk.END, f"{t} {msg}\n")
-            self.log_box.see(tk.END)
-            self.root.update_idletasks()
-        except Exception:
-            pass
-        # 也打印到 stdout，方便日志文件或控制台查看
-        print(f"{t} {msg}")
+    # log() 复用基类 BaseTestGUI.log（线程安全，root.after 异步写入 log_box）
 
     def get_params(self) -> Dict[str, Any]:
         p = {}
@@ -1179,7 +1113,7 @@ class RinGUI:
                     pass
                 self.running_task = None
                 # 一键测试模式：自动关闭窗口，触发进程退出
-                self.root.after(2000, self.root.destroy)
+                self.auto_close(2000)
 
         self.worker_thread = threading.Thread(target=target, daemon=True)
         self.worker_thread.start()
@@ -1331,13 +1265,7 @@ class RinGUI:
         except Exception as e:
             self.log(f"[改名] 出现异常: {e}")
 
-    def run(self):
-        """
-        运行GUI主循环
-        启动Tkinter事件循环
-        """
-        if self.root.winfo_exists():
-            self.root.mainloop()
+    # run() 复用基类 BaseTestGUI.run（启动 mainloop）
 
 # -------------------------
 # Entry point
