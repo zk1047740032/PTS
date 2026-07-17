@@ -353,7 +353,13 @@ class TestResultDialog:
             except tk.TclError:
                 pass
 
-        self.on_generate_report(on_done=on_done)
+        # 收集用户填入的型号/编号/序列号
+        user_fields = {
+            "text_model":  self._entries.get("激光器型号", tk.Entry()).get().strip(),
+            "text_number": self._entries.get("激光器编号", tk.Entry()).get().strip(),
+            "text_serial": self._entries.get("激光器序列号", tk.Entry()).get().strip(),
+        }
+        self.on_generate_report(on_done=on_done, user_fields=user_fields)
 
     def _center_on_parent(self):
         """将弹窗居中于父窗口"""

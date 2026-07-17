@@ -30,7 +30,7 @@ from utils.theme import (
 
 
 # ---- 基准尺寸（以 96 DPI / 100% 系统缩放为基准设计） ----
-_BASE_WINDOW_W      = 666   # 主窗口宽度
+_BASE_WINDOW_W      = 777   # 主窗口宽度
 _BASE_WINDOW_H      = 450    # 主窗口高度
 _BASE_LEFT_PANEL_W  = 275    # 左侧控制面板宽度
 _BASE_RESULT_W      = 370    # 测试结果弹窗宽度
@@ -1097,15 +1097,18 @@ class IntegratedPlatform:
         TestResultDialog.show(self.root, on_generate_report=self.on_generate_report,
                               width=dpix(_BASE_RESULT_W), height=dpix(_BASE_RESULT_H))
 
-    def on_generate_report(self, on_done=None):
+    def on_generate_report(self, on_done=None, user_fields=None):
         """点击生成报告的逻辑
 
         Args:
-            on_done: 可选回调，报告生成完成后调用（用于调用方恢复按钮状态等）
+            on_done:     可选回调，报告生成完成后调用（用于调用方恢复按钮状态等）
+            user_fields: 可选字典，用户从测试结果弹窗填入的字段（型号/编号/序列号）
         """
         # 数据采集已抽至 report.data_collector 模块
         from report.data_collector import assemble_report_data
         report_data = assemble_report_data()
+        if user_fields:
+            report_data.update(user_fields)
 
         # 指定模板和输出路径
         if getattr(sys, 'frozen', False):

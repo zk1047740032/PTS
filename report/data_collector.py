@@ -73,6 +73,11 @@ def assemble_report_data():
         # ---- 项目信息 ----
         "text_date": time.strftime("%Y/%m/%d"),
 
+        # ---- 设备信息（由用户在测试结果弹窗中填入）----
+        "text_model":  "",
+        "text_number": "",
+        "text_serial": "",
+
         # ---- 测试数据 ----
         "text_current": _read_csv_cell(
             r"C:\PTS\zhongzi\SeedValue\seedvalue.csv",
