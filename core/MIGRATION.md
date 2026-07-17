@@ -67,7 +67,7 @@
 | path_a/SingleFrequency.py | DFBLaserController(serial), SingleFrequency(VISA) | SingleFrequencyGUI | done | DFB serial 不继承；SingleFrequency→VisaInstrument；GUI→BaseTestGUI；双线程编排+PeakDetector用write_xy_csv |
 | path_a/SpectrumSNR.py | SpectrumSNR | SpectrumSNRGUI | done | connect 使用 visa_address(tcpip_instr)；截图保留 MMEM:STORe:GRAPhics BMP 原逻辑(非 HCOPy PNG)；GUI 线程简单直接编排未套 Runner |
 | path_a/TimeDomain.py | TimeDomain | TimeDomainGUI | done | 双仪器：scope→VisaInstrument(主)，gen 手动管理；GUI→BaseTestGUI |
-| path_b/WaveLength.py | SignalGenerator, WavemeterController, WlmController | WaveLengthTestGUI | todo | **SignalGenerator 与 path_a 重复**；WavemeterController 走 wlmData DLL 非 VISA |
+| path_b/WaveLength.py | SignalGenerator, WavemeterController, WlmController | WaveLengthTestGUI | done | SignalGenerator→VisaInstrument（保留WAVEFORM_MAP）；WavemeterController/WlmController 非VISA不套基类；GUI→BaseTestGUI |
 
 ---
 
