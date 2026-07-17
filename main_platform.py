@@ -3,7 +3,6 @@ from tkinter import ttk, messagebox
 import json
 import os
 import sys
-import ctypes
 import threading
 import time
 import traceback
@@ -11,19 +10,35 @@ import multiprocessing
 from queue import Empty
 from utils.LightSwitch import OpticalSwitch
 from utils.test_result_dialog import TestResultDialog
+from utils.theme import (
+    dpix,
+    COLOR_BG, COLOR_WHITE, COLOR_CARD_BG, COLOR_CARD_BORDER,
+    COLOR_SECTION_BG, COLOR_SECTION_FG,
+    COLOR_TEXT_PRIMARY, COLOR_TEXT_SECONDARY, COLOR_TEXT_MUTED,
+    COLOR_ACCENT, COLOR_ACCENT_HOVER,
+    COLOR_SUCCESS, COLOR_WARNING,
+    COLOR_LOG_ERROR, COLOR_LOG_COMPLETED, COLOR_LOG_RUNNING, COLOR_LOG_CLICKABLE,
+    FONT_FAMILY, FONT_SIZE_TITLE, FONT_SIZE_HEADING,
+    FONT_SIZE_BODY, FONT_SIZE_SMALL, FONT_SIZE_CAPTION,
+    PADDING_SECTION, PADDING_CARD, PADDING_ROW,
+)
 # ==========================================
 # 动态导入辅助函数
 # ==========================================
 
-if os.name == 'nt':
-    try:
-        ctypes.windll.shcore.SetProcessDpiAwareness(1)
-        dpi = ctypes.windll.user32.GetDpiForSystem()
-        scaling_factor = dpi / 96.0
-    except Exception:
-        scaling_factor = 1.0
-else:
-    scaling_factor = 1.0
+# DPI 缩放工具由 utils.theme 统一提供 (from utils.theme import dpix)
+
+
+# ---- 基准尺寸（以 96 DPI / 100% 系统缩放为基准设计） ----
+_BASE_WINDOW_W      = 666   # 主窗口宽度
+_BASE_WINDOW_H      = 450    # 主窗口高度
+_BASE_LEFT_PANEL_W  = 275    # 左侧控制面板宽度
+_BASE_RESULT_W      = 370    # 测试结果弹窗宽度
+_BASE_RESULT_H      = 410    # 测试结果弹窗高度
+_BASE_HELP_W        = 650   # 说明文档窗口宽度
+_BASE_HELP_H        = 480    # 说明文档窗口高度
+_BASE_SEED_W        = 390    # 种子参数窗口宽度
+_BASE_SEED_H        = 328    # 种子参数窗口高度
 
 # 【修改点 1】：函数签名增加 cmd_queue (命令队列)
 def run_module_process(module_name, start_method, msg_queue, cmd_queue):
@@ -202,7 +217,7 @@ class IntegratedPlatform:
         """
         self.root = root
         self.root.title("PTS-种子")
-        self.root.geometry("860x560")
+        self.root.geometry(f"{dpix(_BASE_WINDOW_W)}x{dpix(_BASE_WINDOW_H)}")
         try:
             self.root.iconbitmap("PreciLasers.ico")
         except:
@@ -229,176 +244,318 @@ class IntegratedPlatform:
     def setup_ui(self):
         """
         设置用户界面
-        
+
         该方法创建并配置整个测试平台的用户界面，包括：
         - 左侧控制面板，包含测试项目选择、全选/清空按钮和标签页
         - 右侧日志监控区域，包含进度条、状态标签和日志树视图
         """
+        # ---- ttk 主题 ----
         self.style = ttk.Style()
-        self.style.theme_use('vista')
-        
-        # 【修改点 4】：修复 Treeview 行高问题
-        self.style.configure("Treeview", rowheight=35, font=("Microsoft YaHei", 10))
-        self.style.configure("Treeview.Heading", font=("Microsoft YaHei", 10, "bold"))
-        
-        # 去掉测试项选项条的背景色
-        self.style.configure("TestCheckbutton.TCheckbutton", background="white", foreground="black")
-        self.style.map("TestCheckbutton.TCheckbutton", background=[("active", "white")])
+        self.style.theme_use('clam')
+        self._configure_ttk_styles()
 
-        # 主布局
-        main_frame = tk.Frame(self.root, bg="white")
+        # ---- 主布局 ----
+        main_frame = tk.Frame(self.root, bg=COLOR_BG)
         main_frame.pack(fill=tk.BOTH, expand=True)
 
         # === 左侧：控制面板 ===
-        control_panel = tk.Frame(main_frame, bg="#ffffff", width=340)
-        control_panel.pack(side=tk.LEFT, fill=tk.Y, padx=0, pady=0)
-        control_panel.pack_propagate(False)
+        self._build_left_panel(main_frame)
 
-        tk.Label(control_panel, text="测试项目选择", font=("微软雅黑", 14, "bold"), bg="#ffffff").pack(pady=15)
-
-        # 全选/清空按钮
-        btn_frame = tk.Frame(control_panel, bg="#ffffff")
-        btn_frame.pack(fill=tk.X, padx=10, pady=5)
-        ttk.Button(btn_frame, text="全选", command=self.select_all, width=11, cursor="hand2").pack(side=tk.LEFT, padx=1)
-        ttk.Button(btn_frame, text="清空", command=self.deselect_all, width=11, cursor="hand2").pack(side=tk.RIGHT, padx=1)
-
-        # 底部按钮区 - 放在 Notebook 之前，让它优先抢占底部空间
-        bottom_frame = tk.Frame(control_panel, bg="#ffffff")
-        bottom_frame.pack(side=tk.BOTTOM, fill=tk.X, padx=10, pady=10)
-        
-        # 打开按钮
-        self.btn_open = tk.Button(bottom_frame, text="打开", 
-                                bg="#1E96E6", fg="white", font=("微软雅黑", 9, "bold"),
-                                command=self.open_selected_windows, cursor="hand2")
-        self.btn_open.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=2)
-
-        # 测试结果
-        self.btn_result = tk.Button(bottom_frame, text="测试结果",
-                                    bg="#FF9900", fg="white", font=("微软雅黑", 9, "bold"),
-                                    command=self.show_test_result_dialog, cursor="hand2")
-        self.btn_result.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=2)
-        
-        # 一键测试按钮
-        self.btn_run = tk.Button(bottom_frame, text="一键测试", 
-                                bg="#02BC08", fg="white", font=("微软雅黑", 9, "bold"),
-                                command=self.run_selected_tests, cursor="hand2")
-        self.btn_run.pack(side=tk.RIGHT, fill=tk.X, expand=True, padx=2)
-
-        # Notebook - 放在底部按钮之后，会自适应占据所有"剩余"空间
-        self.nb = ttk.Notebook(control_panel)
-        self.nb.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
-
-        for group_name, module_list in MODULE_GROUPS.items():
-            frame = ttk.Frame(self.nb)
-            self.nb.add(frame, text=f" {group_name} ")
-            
-            if group_name == "光路A":
-                sub_nb = ttk.Notebook(frame)
-                sub_nb.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
-                
-                for channel_name, channel_modules in module_list.items():
-                    channel_frame = ttk.Frame(sub_nb)
-                    sub_nb.add(channel_frame, text=f" {channel_name} ")
-                    
-                    canvas = tk.Canvas(channel_frame, bg="white")
-                    scrollbar = ttk.Scrollbar(channel_frame, orient="vertical", command=canvas.yview)
-                    scroll_frame = tk.Frame(canvas, bg="white")
-
-                    scroll_frame.bind("<Configure>", lambda e, c=canvas: c.configure(scrollregion=c.bbox("all")))
-                    canvas.create_window((0, 0), window=scroll_frame, anchor="nw")
-                    canvas.configure(yscrollcommand=scrollbar.set)
-
-                    canvas.pack(side="left", fill="both", expand=True)
-                    scrollbar.pack(side="right", fill="y")
-
-                    for name in channel_modules:
-                        var = tk.BooleanVar()
-                        self.check_vars[name] = var
-                        cb = ttk.Checkbutton(scroll_frame, text=name, variable=var, 
-                                             command=lambda n=name: self.on_test_item_checked(n),
-                                             style="TestCheckbutton.TCheckbutton")
-                        cb.bind("<Double-1>", lambda e, n=name, w=cb: self.on_test_item_double_click(e, n, w))
-                        cb.pack(anchor="w", padx=10, pady=5)
-            else:
-                canvas = tk.Canvas(frame, bg="white")
-                scrollbar = ttk.Scrollbar(frame, orient="vertical", command=canvas.yview)
-                scroll_frame = tk.Frame(canvas, bg="white")
-
-                scroll_frame.bind("<Configure>", lambda e, c=canvas: c.configure(scrollregion=c.bbox("all")))
-                canvas.create_window((0, 0), window=scroll_frame, anchor="nw")
-                canvas.configure(yscrollcommand=scrollbar.set)
-
-                canvas.pack(side="left", fill="both", expand=True)
-                scrollbar.pack(side="right", fill="y")
-
-                for name in module_list:
-                    var = tk.BooleanVar()
-                    self.check_vars[name] = var
-                    cb = ttk.Checkbutton(scroll_frame, text=name, variable=var, 
-                                         command=lambda n=name: self.on_test_item_checked(n),
-                                         style="TestCheckbutton.TCheckbutton")
-                    cb.bind("<Double-1>", lambda e, n=name, w=cb: self.on_test_item_double_click(e, n, w))
-                    cb.pack(anchor="w", padx=10, pady=5)
+        # === 分隔线 ===
+        sep = tk.Frame(main_frame, bg=COLOR_CARD_BORDER, width=1)
+        sep.pack(side=tk.LEFT, fill=tk.Y)
 
         # === 右侧：日志监控 ===
-        right_panel = tk.Frame(main_frame, bg="white")
-        right_panel.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
+        self._build_right_panel(main_frame)
 
-        # 运行状态监控标题行（含种子参数按钮）
-        monitor_header = tk.Frame(right_panel, bg="white")
-        monitor_header.pack(fill=tk.X, padx=10, pady=10)
+    # ---------- ttk 样式 ----------
 
-        tk.Label(monitor_header, text="运行状态监控", font=("微软雅黑", 12), bg="white").pack(side=tk.LEFT)
+    def _configure_ttk_styles(self):
+        """统一配置 ttk 控件样式"""
+        style = self.style
+        F = FONT_FAMILY
+        B = FONT_SIZE_BODY
 
-        self.btn_seed_params = ttk.Button(monitor_header, text="种子参数",
-                                          command=self.show_seed_params, width=10, cursor="hand2")
+        # 全局默认
+        style.configure(".", font=(F, B), background=COLOR_BG)
+
+        # Notebook（标签页）
+        style.configure("TNotebook", background=COLOR_BG, borderwidth=0)
+        style.configure("TNotebook.Tab",
+                        font=(F, B, "bold"), padding=[18, 6],
+                        background=COLOR_SECTION_BG, foreground=COLOR_TEXT_SECONDARY,
+                        borderwidth=0)
+        style.map("TNotebook.Tab",
+                  background=[("selected", COLOR_WHITE)],
+                  foreground=[("selected", COLOR_ACCENT)])
+
+        # 子 Notebook（通道标签）
+        style.configure("Sub.TNotebook", background=COLOR_CARD_BG, borderwidth=0)
+        style.configure("Sub.TNotebook.Tab",
+                        font=(F, B), padding=[12, 4],
+                        background=COLOR_CARD_BG, foreground=COLOR_TEXT_SECONDARY,
+                        borderwidth=0)
+        style.map("Sub.TNotebook.Tab",
+                  background=[("selected", COLOR_ACCENT)],
+                  foreground=[("selected", COLOR_WHITE)])
+
+        # Treeview
+        style.configure("Treeview",
+                        background=COLOR_WHITE, fieldbackground=COLOR_WHITE,
+                        rowheight=32, font=(F, B), borderwidth=0)
+        style.configure("Treeview.Heading",
+                        font=(F, B, "bold"),
+                        background=COLOR_SECTION_BG, foreground=COLOR_TEXT_SECONDARY,
+                        borderwidth=0, relief="flat")
+        style.map("Treeview.Heading",
+                  background=[("active", COLOR_SECTION_BG)])
+
+        # Progressbar
+        style.configure("TProgressbar",
+                        background=COLOR_ACCENT, troughcolor=COLOR_SECTION_BG,
+                        borderwidth=0, thickness=6)
+
+        # Scrollbar
+        style.configure("TScrollbar",
+                        background=COLOR_WHITE, troughcolor=COLOR_BG,
+                        borderwidth=0, arrowcolor=COLOR_TEXT_SECONDARY, arrowsize=14)
+
+        # Checkbutton
+        style.configure("TestCheckbutton.TCheckbutton",
+                        background=COLOR_CARD_BG, foreground=COLOR_TEXT_PRIMARY,
+                        font=(F, B))
+        style.map("TestCheckbutton.TCheckbutton",
+                  background=[("active", COLOR_CARD_BG), ("selected", COLOR_CARD_BG)])
+
+        # Frame（统一背景色）
+        style.configure("TFrame", background=COLOR_BG)
+
+    # ---------- 左侧面板 ----------
+
+    def _build_left_panel(self, parent):
+        """构建左侧控制面板"""
+        panel = tk.Frame(parent, bg=COLOR_BG, width=dpix(_BASE_LEFT_PANEL_W))
+        panel.pack(side=tk.LEFT, fill=tk.Y)
+        panel.pack_propagate(False)
+
+        # ---- 标题 ----
+        header = tk.Frame(panel, bg=COLOR_BG)
+        header.pack(fill=tk.X, padx=PADDING_SECTION, pady=(20, 0))
+
+        accent = tk.Frame(header, bg=COLOR_ACCENT, width=4, height=24)
+        accent.pack(side=tk.LEFT, padx=(0, 8))
+        accent.pack_propagate(False)
+
+        tk.Label(header, text="测试项目选择",
+                 font=(FONT_FAMILY, FONT_SIZE_HEADING, "bold"),
+                 fg=COLOR_TEXT_PRIMARY, bg=COLOR_BG).pack(side=tk.LEFT)
+
+        tk.Label(header, text="单独测试或一键测试",
+                 font=(FONT_FAMILY, FONT_SIZE_CAPTION),
+                 fg=COLOR_TEXT_MUTED, bg=COLOR_BG).pack(side=tk.LEFT, padx=(8, 0), pady=(6, 0))
+
+        # ---- 全选 / 清空 ----
+        btn_row = tk.Frame(panel, bg=COLOR_BG)
+        btn_row.pack(fill=tk.X, padx=PADDING_SECTION, pady=(12, 6))
+
+        self._make_secondary_button(btn_row, "全选", self.select_all).pack(
+            side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 4))
+        self._make_secondary_button(btn_row, "清空", self.deselect_all).pack(
+            side=tk.RIGHT, fill=tk.X, expand=True, padx=(4, 0))
+
+        # ---- 测试项卡片 ----
+        card = tk.Frame(panel, bg=COLOR_CARD_BG,
+                        highlightbackground=COLOR_CARD_BORDER,
+                        highlightthickness=1)
+        card.pack(fill=tk.BOTH, expand=True, padx=PADDING_SECTION, pady=(0, 10))
+
+        self._build_notebook(card)
+
+        # ---- 底部操作按钮 ----
+        bottom = tk.Frame(panel, bg=COLOR_BG)
+        bottom.pack(side=tk.BOTTOM, fill=tk.X, padx=PADDING_SECTION, pady=(0, 16))
+
+        self.btn_open = self._make_primary_button(bottom, "打开", self.open_selected_windows)
+        self.btn_open.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 3))
+
+        self.btn_result = self._make_warning_button(bottom, "测试结果", self.show_test_result_dialog)
+        self.btn_result.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=3)
+
+        self.btn_run = self._make_success_button(bottom, "一键测试", self.run_selected_tests)
+        self.btn_run.pack(side=tk.RIGHT, fill=tk.X, expand=True, padx=(3, 0))
+
+    def _build_notebook(self, parent):
+        """构建测试项标签页"""
+        self.nb = ttk.Notebook(parent)
+        self.nb.pack(fill=tk.BOTH, expand=True, padx=2, pady=2)
+
+        for group_name, module_list in MODULE_GROUPS.items():
+            tab_frame = tk.Frame(self.nb, bg=COLOR_CARD_BG)
+            self.nb.add(tab_frame, text=f"  {group_name}  ")
+
+            if group_name == "光路A":
+                # 嵌套子标签页
+                sub_nb = ttk.Notebook(tab_frame, style="Sub.TNotebook")
+                sub_nb.pack(fill=tk.BOTH, expand=True, padx=2, pady=2)
+
+                for channel_name, channel_modules in module_list.items():
+                    ch_frame = tk.Frame(sub_nb, bg=COLOR_CARD_BG)
+                    sub_nb.add(ch_frame, text=f"  {channel_name}  ")
+                    self._build_checkbox_list(ch_frame, channel_modules)
+            else:
+                self._build_checkbox_list(tab_frame, module_list)
+
+    def _build_checkbox_list(self, parent, module_names):
+        """在可滚动画布中创建复选框列表"""
+        canvas = tk.Canvas(parent, bg=COLOR_CARD_BG, highlightthickness=0)
+        scrollbar = ttk.Scrollbar(parent, orient="vertical", command=canvas.yview)
+        scroll_frame = tk.Frame(canvas, bg=COLOR_CARD_BG)
+
+        scroll_frame.bind(
+            "<Configure>",
+            lambda *_: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+        canvas.create_window((0, 0), window=scroll_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+
+        def _on_mousewheel(event):
+            canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+        canvas.bind("<Enter>", lambda *_: canvas.bind_all("<MouseWheel>", _on_mousewheel))
+        canvas.bind("<Leave>", lambda *_: canvas.unbind_all("<MouseWheel>"))
+
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+
+        for name in module_names:
+            var = tk.BooleanVar()
+            self.check_vars[name] = var
+            cb = ttk.Checkbutton(
+                scroll_frame, text=name, variable=var,
+                command=lambda n=name: self.on_test_item_checked(n),
+                style="TestCheckbutton.TCheckbutton"
+            )
+            cb.bind("<Double-1>",
+                    lambda e, n=name, w=cb: self.on_test_item_double_click(e, n, w))
+            cb.pack(anchor="w", padx=14, pady=6)
+
+    # ---------- 右侧面板 ----------
+
+    def _build_right_panel(self, parent):
+        """构建右侧日志监控面板"""
+        panel = tk.Frame(parent, bg=COLOR_BG)
+        panel.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
+
+        # ---- 标题行 ----
+        header = tk.Frame(panel, bg=COLOR_BG)
+        header.pack(fill=tk.X, padx=PADDING_SECTION, pady=(20, 0))
+
+        accent = tk.Frame(header, bg=COLOR_ACCENT, width=4, height=24)
+        accent.pack(side=tk.LEFT, padx=(0, 8))
+        accent.pack_propagate(False)
+
+        tk.Label(header, text="运行状态监控",
+                 font=(FONT_FAMILY, FONT_SIZE_HEADING, "bold"),
+                 fg=COLOR_TEXT_PRIMARY, bg=COLOR_BG).pack(side=tk.LEFT)
+
+        self.btn_seed_params = self._make_secondary_button(
+            header, "种子参数", self.show_seed_params)
         self.btn_seed_params.pack(side=tk.RIGHT)
-        
-        self.progress = ttk.Progressbar(right_panel, mode='determinate')
-        self.progress.pack(fill=tk.X, padx=10)
-        
-        # 添加状态和操作按钮框架
-        status_frame = tk.Frame(right_panel, bg="white")
-        status_frame.pack(fill=tk.X, padx=10, pady=5)
-        
-        # 状态标签放在左侧
-        self.status_label = tk.Label(status_frame, text="就绪", bg="white", fg="#666")
-        self.status_label.pack(side=tk.LEFT)
-        
-        # 操作按钮放在右侧
-        button_frame = tk.Frame(status_frame, bg="white")
-        button_frame.pack(side=tk.RIGHT)
-        
-        # 清空日志按钮
-        self.btn_clear_log = ttk.Button(button_frame, text="清空日志", 
-                                     command=self.clear_logs, width=10, cursor="hand2")
-        self.btn_clear_log.pack(side=tk.LEFT, padx=1)
-        
-        # 说明文档按钮
-        self.btn_help = ttk.Button(button_frame, text="说明文档", 
-                                 command=self.show_help, width=10, cursor="hand2")
-        self.btn_help.pack(side=tk.LEFT, padx=1)
 
-        log_frame = tk.Frame(right_panel)
-        log_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
-        
-        self.log_tree = ttk.Treeview(log_frame, columns=("Time", "Module", "Message"), show="headings")
-        
-        # 【修改点 5】：设置具体的列宽，避免挤在一起
+        # ---- 进度条 ----
+        self.progress = ttk.Progressbar(panel, mode='determinate')
+        self.progress.pack(fill=tk.X, padx=PADDING_SECTION, pady=(10, 0))
+
+        # ---- 状态 / 操作行 ----
+        status_row = tk.Frame(panel, bg=COLOR_BG)
+        status_row.pack(fill=tk.X, padx=PADDING_SECTION, pady=(6, 0))
+
+        self.status_label = tk.Label(
+            status_row, text="就绪",
+            font=(FONT_FAMILY, FONT_SIZE_SMALL),
+            bg=COLOR_BG, fg=COLOR_TEXT_MUTED
+        )
+        self.status_label.pack(side=tk.LEFT)
+
+        btn_group = tk.Frame(status_row, bg=COLOR_BG)
+        btn_group.pack(side=tk.RIGHT)
+
+        self.btn_clear_log = self._make_secondary_button(btn_group, "清空日志", self.clear_logs)
+        self.btn_clear_log.pack(side=tk.LEFT, padx=(0, 4))
+
+        self.btn_help = self._make_secondary_button(btn_group, "说明文档", self.show_help)
+        self.btn_help.pack(side=tk.LEFT, padx=(4, 0))
+
+        # ---- 日志卡片 ----
+        log_card = tk.Frame(panel, bg=COLOR_CARD_BG,
+                            highlightbackground=COLOR_CARD_BORDER,
+                            highlightthickness=1)
+        log_card.pack(fill=tk.BOTH, expand=True,
+                      padx=PADDING_SECTION, pady=(6, PADDING_SECTION))
+
+        self.log_tree = ttk.Treeview(
+            log_card, columns=("Time", "Module", "Message"),
+            show="headings"
+        )
         self.log_tree.heading("Time", text="时间")
         self.log_tree.column("Time", width=80, stretch=False, anchor="center")
-        
         self.log_tree.heading("Module", text="模块")
         self.log_tree.column("Module", width=110, stretch=False, anchor="w")
-        
         self.log_tree.heading("Message", text="消息内容")
-        self.log_tree.column("Message", minwidth=200, stretch=True, anchor="w") # 让消息列自动填充剩余空间
-        
-        vsb = ttk.Scrollbar(log_frame, orient="vertical", command=self.log_tree.yview)
+        self.log_tree.column("Message", minwidth=200, stretch=True, anchor="w")
+
+        vsb = ttk.Scrollbar(log_card, orient="vertical", command=self.log_tree.yview)
         self.log_tree.configure(yscrollcommand=vsb.set)
-        
-        self.log_tree.pack(side="left", fill="both", expand=True)
-        vsb.pack(side="right", fill="y")
+
+        self.log_tree.pack(side="left", fill="both", expand=True, padx=(2, 0), pady=2)
+        vsb.pack(side="right", fill="y", padx=(0, 2), pady=2)
+
+    # ---------- 按钮工厂 ----------
+
+    def _make_primary_button(self, parent, text, command):
+        """蓝色主操作按钮"""
+        return tk.Button(
+            parent, text=text,
+            font=(FONT_FAMILY, FONT_SIZE_BODY, "bold"),
+            bg=COLOR_ACCENT, fg=COLOR_WHITE,
+            activebackground=COLOR_ACCENT_HOVER, activeforeground=COLOR_WHITE,
+            relief="flat", bd=0, padx=10, pady=6,
+            command=command, cursor="hand2"
+        )
+
+    def _make_success_button(self, parent, text, command):
+        """绿色成功按钮"""
+        return tk.Button(
+            parent, text=text,
+            font=(FONT_FAMILY, FONT_SIZE_BODY, "bold"),
+            bg=COLOR_SUCCESS, fg=COLOR_WHITE,
+            activebackground="#2F8A4C", activeforeground=COLOR_WHITE,
+            relief="flat", bd=0, padx=10, pady=6,
+            command=command, cursor="hand2"
+        )
+
+    def _make_warning_button(self, parent, text, command):
+        """橙色次级强调按钮"""
+        return tk.Button(
+            parent, text=text,
+            font=(FONT_FAMILY, FONT_SIZE_BODY, "bold"),
+            bg=COLOR_WARNING, fg=COLOR_WHITE,
+            activebackground="#E08A3A", activeforeground=COLOR_WHITE,
+            relief="flat", bd=0, padx=10, pady=6,
+            command=command, cursor="hand2"
+        )
+
+    def _make_secondary_button(self, parent, text, command):
+        """灰色次级按钮（带柔和边框，区别于背景）"""
+        return tk.Button(
+            parent, text=text,
+            font=(FONT_FAMILY, FONT_SIZE_BODY),
+            bg=COLOR_CARD_BORDER, fg=COLOR_TEXT_SECONDARY,
+            activebackground="#D0D5DB", activeforeground=COLOR_TEXT_PRIMARY,
+            relief="solid", bd=1,
+            highlightbackground="#D5D9DF", highlightthickness=1,
+            padx=12, pady=5,
+            command=command, cursor="hand2"
+        )
 
     # ================= 逻辑控制 =================
 
@@ -426,14 +583,15 @@ class IntegratedPlatform:
         self.log_tree.yview_moveto(1)
         
         if level == "error":
-            self.log_tree.tag_configure("error", foreground="red")
+            self.log_tree.tag_configure("error", foreground=COLOR_LOG_ERROR)
         elif level == "completed":
-            self.log_tree.tag_configure("completed", foreground="#008000")
+            self.log_tree.tag_configure("completed", foreground=COLOR_LOG_COMPLETED)
         elif level == "running":
-            self.log_tree.tag_configure("running", foreground="#0000FF")
-        
+            self.log_tree.tag_configure("running", foreground=COLOR_LOG_RUNNING)
+
         if file_path and os.path.exists(file_path):
-            self.log_tree.tag_configure("clickable", foreground="#0066CC", font=("Microsoft YaHei", 10, "underline"))
+            self.log_tree.tag_configure("clickable", foreground=COLOR_LOG_CLICKABLE,
+                                        font=(FONT_FAMILY, FONT_SIZE_BODY, "underline"))
         
         if file_path:
             self.log_tree.tag_bind("clickable", "<Double-Button-1>", lambda e, fp=file_path: self._open_file(fp))
@@ -524,7 +682,7 @@ class IntegratedPlatform:
         # 创建说明文档窗口
         help_window = tk.Toplevel(self.root)
         help_window.title("操作说明")
-        help_window.geometry("1500x1000")
+        help_window.geometry(f"{dpix(_BASE_HELP_W)}x{dpix(_BASE_HELP_H)}")
         help_window.resizable(False, False)
         
         # 创建滚动文本区域
@@ -561,7 +719,7 @@ class IntegratedPlatform:
 
         seed_window = tk.Toplevel(self.root)
         seed_window.title("种子参数")
-        seed_window.geometry("710x630")
+        seed_window.geometry(f"{dpix(_BASE_SEED_W)}x{dpix(_BASE_SEED_H)}")
         seed_window.resizable(True, True)
 
         # 嵌入查询面板
@@ -777,7 +935,8 @@ class IntegratedPlatform:
 
         # 弹出测试结果窗口
         self.root.after(0, lambda: TestResultDialog.show(
-            self.root, on_generate_report=self.on_generate_report
+            self.root, on_generate_report=self.on_generate_report,
+            width=dpix(_BASE_RESULT_W), height=dpix(_BASE_RESULT_H)
         ))
 
     def _wait_for_modules(self, module_names: list):
@@ -838,11 +997,11 @@ class IntegratedPlatform:
         finally:
             active_count = sum(1 for p in self.processes.values() if p.is_alive())
             if active_count > 0:
-                self.status_label.config(text=f"当前活跃窗口: {active_count}", fg="blue")
+                self.status_label.config(text=f"当前活跃窗口: {active_count}", fg=COLOR_LOG_RUNNING)
                 self.progress.config(mode='indeterminate')
                 self.progress.start(20)
             else:
-                self.status_label.config(text="所有任务已结束", fg="black")
+                self.status_label.config(text="所有任务已结束", fg=COLOR_TEXT_SECONDARY)
                 self.progress.stop()
                 self.progress.config(mode='determinate', value=0)
 
@@ -935,7 +1094,8 @@ class IntegratedPlatform:
 
     def show_test_result_dialog(self):
         """打开测试结果弹窗"""
-        TestResultDialog.show(self.root, on_generate_report=self.on_generate_report)
+        TestResultDialog.show(self.root, on_generate_report=self.on_generate_report,
+                              width=dpix(_BASE_RESULT_W), height=dpix(_BASE_RESULT_H))
 
     def on_generate_report(self, on_done=None):
         """点击生成报告的逻辑

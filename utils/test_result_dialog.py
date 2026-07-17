@@ -14,20 +14,14 @@ from tkinter import ttk
 from typing import Optional, Callable
 
 from report.data_collector import assemble_report_data
+from utils.theme import (
+    COLOR_BG, COLOR_CARD_BG, COLOR_CARD_BORDER,
+    COLOR_SECTION_BG, COLOR_SECTION_FG,
+    COLOR_TEXT_PRIMARY, COLOR_TEXT_SECONDARY, COLOR_TEXT_MUTED,
+    COLOR_ENTRY_BORDER, COLOR_ENTRY_BG,
+    COLOR_ACCENT, COLOR_ACCENT_HOVER,
+)
 
-
-# ---- 调色板 ----
-_COLOR_BG           = "#FFFFFF"   # 窗口背景
-_COLOR_CARD_BG       = "#FAFBFC"   # 卡片背景
-_COLOR_SECTION_BG    = "#EEF1F5"   # 分区标题背景
-_COLOR_SECTION_FG    = "#4A5568"   # 分区标题文字
-_COLOR_BORDER        = "#E2E6EB"   # 卡片边框
-_COLOR_LABEL         = "#5A6577"   # 字段标签颜色
-_COLOR_VALUE         = "#1A202C"   # 数值颜色
-_COLOR_VALUE_EMPTY   = "#A0AEC0"   # 暂不显示 / 无数据颜色
-_COLOR_ENTRY_BORDER  = "#D2D6DC"   # 输入框边框
-_COLOR_ENTRY_BG      = "#FFFFFF"   # 输入框背景
-_COLOR_ACCENT        = "#2B6FF2"   # 强调色（标题）
 
 # ---- 字段定义: (标签文本, data_collector 键名, 是否可编辑, 单位) ----
 _FIELDS_EDITABLE = [
@@ -63,10 +57,14 @@ class TestResultDialog:
     def __init__(self,
                  parent: tk.Tk,
                  test_results: Optional[dict] = None,
-                 on_generate_report: Optional[Callable] = None):
+                 on_generate_report: Optional[Callable] = None,
+                 width: int = 640,
+                 height: int = 780):
         self.parent = parent
         self.test_results = test_results or {}
         self.on_generate_report = on_generate_report
+        self._width = width
+        self._height = height
 
         self._report_data = assemble_report_data()
         self._entries: dict[str, tk.Entry] = {}
@@ -79,9 +77,9 @@ class TestResultDialog:
         """创建弹窗界面"""
         self.dialog = tk.Toplevel(self.parent)
         self.dialog.title("测试结果")
-        self.dialog.geometry("660x820")
+        self.dialog.geometry(f"{self._width}x{self._height}")
         self.dialog.resizable(True, True)
-        self.dialog.configure(bg=_COLOR_BG)
+        self.dialog.configure(bg=COLOR_BG)
         self.dialog.transient(self.parent)
 
         try:
@@ -102,11 +100,11 @@ class TestResultDialog:
 
     def _build_header(self):
         """标题区域"""
-        header_frame = tk.Frame(self.dialog, bg=_COLOR_BG)
+        header_frame = tk.Frame(self.dialog, bg=COLOR_BG)
         header_frame.pack(fill=tk.X, padx=0, pady=(24, 0))
 
         # 左侧色条 + 标题
-        accent_bar = tk.Frame(header_frame, bg=_COLOR_ACCENT, width=4, height=28)
+        accent_bar = tk.Frame(header_frame, bg=COLOR_ACCENT, width=4, height=28)
         accent_bar.pack(side=tk.LEFT, padx=(30, 10))
         # 禁止色条随布局伸缩
         accent_bar.pack_propagate(False)
@@ -114,25 +112,25 @@ class TestResultDialog:
         tk.Label(
             header_frame, text="测试结果",
             font=("微软雅黑", 17, "bold"),
-            fg="#1A202C", bg=_COLOR_BG
+            fg="#1A202C", bg=COLOR_BG
         ).pack(side=tk.LEFT)
 
         tk.Label(
             header_frame,
             text="各项测试数据汇总",
             font=("微软雅黑", 9),
-            fg="#A0AEC0", bg=_COLOR_BG
+            fg="#A0AEC0", bg=COLOR_BG
         ).pack(side=tk.LEFT, padx=(10, 0), pady=(8, 0))
 
     def _build_scrollable_content(self):
         """创建带滚动条的数据内容区域"""
-        outer = tk.Frame(self.dialog, bg=_COLOR_BG)
+        outer = tk.Frame(self.dialog, bg=COLOR_BG)
         outer.pack(fill=tk.BOTH, expand=True, padx=24, pady=(12, 8))
 
-        canvas = tk.Canvas(outer, bg=_COLOR_BG, highlightthickness=0)
+        canvas = tk.Canvas(outer, bg=COLOR_BG, highlightthickness=0)
         scrollbar = ttk.Scrollbar(outer, orient="vertical", command=canvas.yview)
 
-        self.content_frame = tk.Frame(canvas, bg=_COLOR_BG)
+        self.content_frame = tk.Frame(canvas, bg=COLOR_BG)
         self.content_frame.bind(
             "<Configure>",
             lambda *_: canvas.configure(scrollregion=canvas.bbox("all"))
@@ -158,7 +156,7 @@ class TestResultDialog:
         # ---- 卡片 1：基本信息 ----
         self._build_card("基本信息", _FIELDS_EDITABLE)
         # 卡片间距
-        tk.Frame(self.content_frame, bg=_COLOR_BG, height=12).pack()
+        tk.Frame(self.content_frame, bg=COLOR_BG, height=12).pack()
 
         # ---- 卡片 2：测试数据 ----
         self._build_card("测试数据", _FIELDS_MEASURED)
@@ -171,25 +169,25 @@ class TestResultDialog:
             fields: 字段定义列表, 每项为 (label, data_key, editable, unit)
         """
         # 卡片容器
-        card = tk.Frame(self.content_frame, bg=_COLOR_CARD_BG,
-                        highlightbackground=_COLOR_BORDER,
-                        highlightthickness=1, highlightcolor=_COLOR_BORDER)
+        card = tk.Frame(self.content_frame, bg=COLOR_CARD_BG,
+                        highlightbackground=COLOR_CARD_BORDER,
+                        highlightthickness=1, highlightcolor=COLOR_CARD_BORDER)
         card.pack(fill=tk.X, pady=0)
 
         # 卡片标题行
-        section_bar = tk.Frame(card, bg=_COLOR_SECTION_BG, height=32)
+        section_bar = tk.Frame(card, bg=COLOR_SECTION_BG, height=32)
         section_bar.pack(fill=tk.X)
         section_bar.pack_propagate(False)
 
         tk.Label(
             section_bar, text=f"  {title}",
             font=("微软雅黑", 10, "bold"),
-            fg=_COLOR_SECTION_FG, bg=_COLOR_SECTION_BG,
+            fg=COLOR_SECTION_FG, bg=COLOR_SECTION_BG,
             anchor="w"
         ).pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
         # 字段网格
-        inner = tk.Frame(card, bg=_COLOR_CARD_BG)
+        inner = tk.Frame(card, bg=COLOR_CARD_BG)
         inner.pack(fill=tk.X, padx=14, pady=(8, 10))
 
         for i, (label_text, data_key, editable, unit) in enumerate(fields):
@@ -210,7 +208,7 @@ class TestResultDialog:
             editable:   True 创建 Entry，False 创建只读 Label
             unit:       单位字符串（可为空）
         """
-        row_bg = _COLOR_CARD_BG if row_idx % 2 == 0 else _COLOR_BG
+        row_bg = COLOR_CARD_BG if row_idx % 2 == 0 else COLOR_BG
 
         # 整行背景 frame
         row_frame = tk.Frame(parent, bg=row_bg, height=36)
@@ -222,7 +220,7 @@ class TestResultDialog:
         tk.Label(
             row_frame, text=label_text,
             font=("微软雅黑", 10), bg=row_bg,
-            fg=_COLOR_LABEL, anchor="e", width=16
+            fg=COLOR_TEXT_SECONDARY, anchor="e", width=16
         ).grid(row=0, column=0, sticky="e", padx=(8, 8), pady=0)
 
         if editable:
@@ -233,14 +231,14 @@ class TestResultDialog:
     def _build_editable_field(self, parent: tk.Frame, label_text: str):
         """创建可编辑输入框（带边框包装）"""
         # 边框包装器
-        border = tk.Frame(parent, bg=_COLOR_ENTRY_BORDER, height=28)
+        border = tk.Frame(parent, bg=COLOR_ENTRY_BORDER, height=28)
         border.grid(row=0, column=1, sticky="ew", padx=(8, 14), pady=3)
 
         entry = tk.Entry(
             border, font=("微软雅黑", 10),
-            bg=_COLOR_ENTRY_BG, fg=_COLOR_VALUE,
+            bg=COLOR_ENTRY_BG, fg=COLOR_TEXT_PRIMARY,
             relief="flat", bd=0, highlightthickness=0,
-            insertbackground=_COLOR_ACCENT
+            insertbackground=COLOR_ACCENT
         )
         entry.pack(fill=tk.BOTH, expand=True, padx=1, pady=1)
         self._entries[label_text] = entry
@@ -262,7 +260,7 @@ class TestResultDialog:
             value_label = tk.Label(
                 parent, text=value_text,
                 font=("微软雅黑", 11, "bold"),
-                bg=row_bg, fg=_COLOR_VALUE,
+                bg=row_bg, fg=COLOR_TEXT_PRIMARY,
                 anchor="w"
             )
             value_label.grid(row=0, column=1, sticky="w", padx=(8, 0), pady=0)
@@ -277,7 +275,7 @@ class TestResultDialog:
         else:
             # 无数据
             status_dot = "●" if data_key is None else "○"
-            status_color = _COLOR_VALUE_EMPTY
+            status_color = COLOR_TEXT_MUTED
             text = _PLACEHOLDER if data_key is None else "暂无数据"
 
             tk.Label(
@@ -289,14 +287,14 @@ class TestResultDialog:
 
     def _build_bottom_buttons(self):
         """底部按钮栏"""
-        bottom_frame = tk.Frame(self.dialog, bg=_COLOR_BG)
+        bottom_frame = tk.Frame(self.dialog, bg=COLOR_BG)
         bottom_frame.pack(fill=tk.X, padx=24, pady=(4, 18))
 
         if self.on_generate_report is not None:
             self.btn_generate_report = tk.Button(
                 bottom_frame, text="生成报告",
                 font=("微软雅黑", 10, "bold"),
-                bg=_COLOR_ACCENT, fg="white",
+                bg=COLOR_ACCENT, fg="white",
                 activebackground="#1E5CD6", activeforeground="white",
                 relief="flat", bd=0, padx=20, pady=6,
                 command=self._on_generate_report_click,
@@ -307,7 +305,7 @@ class TestResultDialog:
         close_btn = tk.Button(
             bottom_frame, text="关闭",
             font=("微软雅黑", 10),
-            bg=_COLOR_BG, fg="#5A6577",
+            bg=COLOR_BG, fg="#5A6577",
             activebackground="#EEF1F5", activeforeground="#1A202C",
             relief="flat", bd=0, padx=20, pady=6,
             command=self.dialog.destroy,
@@ -343,14 +341,14 @@ class TestResultDialog:
         """点击生成报告"""
         self.btn_generate_report.config(
             state="disabled", text="生成中...",
-            bg="#A0AEC0", activebackground="#A0AEC0"
+            bg=COLOR_TEXT_MUTED, activebackground=COLOR_TEXT_MUTED
         )
 
         def on_done():
             try:
                 self.btn_generate_report.config(
                     state="normal", text="生成报告",
-                    bg=_COLOR_ACCENT, activebackground="#1E5CD6"
+                    bg=COLOR_ACCENT, activebackground=COLOR_ACCENT_HOVER
                 )
             except tk.TclError:
                 pass
@@ -375,6 +373,10 @@ class TestResultDialog:
     @staticmethod
     def show(parent: tk.Tk,
              test_results: Optional[dict] = None,
-             on_generate_report: Optional[Callable] = None):
+             on_generate_report: Optional[Callable] = None,
+             width: int = 640,
+             height: int = 780):
         """快速弹出测试结果窗口"""
-        TestResultDialog(parent, test_results, on_generate_report=on_generate_report)
+        TestResultDialog(parent, test_results,
+                         on_generate_report=on_generate_report,
+                         width=width, height=height)
