@@ -1,5 +1,12 @@
-import ctypes
-ctypes.windll.shcore.SetProcessDpiAwareness(1)  # Windows DPI 自适应
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+SingleFrequency — 单频测试程序
+
+DFBLaserController(serial) + SingleFrequency(VisaInstrument) + PeakDetector + SingleFrequencyGUI(BaseTestGUI)
+DFB 是 RS-485 串口控制，不继承 VisaInstrument；频谱仪走 VISA。
+双并行控制线程（温度+电流）+ 主细扫循环。
+"""
 
 import os
 import re
@@ -9,7 +16,6 @@ import math
 import queue
 import functools
 import threading
-import pyvisa
 import numpy as np
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
@@ -19,6 +25,16 @@ matplotlib.use('Agg')  # 后端绘图，不阻塞 GUI
 import matplotlib.pyplot as plt
 
 from PIL import Image, ImageTk
+
+import sys, pathlib
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
+from core import (
+    VisaInstrument,
+    BaseTestGUI,
+    visa_address,
+    clear_directory,
+    write_xy_csv,
+)
 
 # ===============  DFB 种子激光器 RS-485 串口控制  ===============
 class DFBLaserController:
@@ -258,13 +274,12 @@ class DFBLaserController:
 
 
 # ===============  频谱仪控制 & 峰值检测  ===============
-class SingleFrequency:
+class SingleFrequency(VisaInstrument):
     def __init__(self, ip, timeout_s=60.0, log=print, cmd_map=None):
+        super().__init__(log_func=log, timeout_ms=int(timeout_s * 1000))
         self.ip = ip
         self.timeout_s = timeout_s
-        self.log = log
-        self.rm = None
-        self.sa = None
+        self.sa = None  # self.inst 的业务别名，在 connect() 中设置
         self.last_rbw_hz = None
         self.last_vbw_hz = None
         self.CMD = {
@@ -294,16 +309,14 @@ class SingleFrequency:
         if cmd_map:
             self.CMD.update(cmd_map)
 
-    def open(self):
-        self.rm = pyvisa.ResourceManager()
-        #self.sa = self.rm.open_resource(f"TCPIP::{self.ip}::INSTR")
-        self.sa = self.rm.open_resource(f"TCPIP::{self.ip}::5025::SOCKET")
-        self.sa.timeout = int(self.timeout_s * 1000)
-        self.sa.write_termination = '\n'
-        self.sa.read_termination = '\n'
+    def connect(self):
+        ok = super().connect(visa_address(self.ip, kind="socket5025"), idn=True)
+        if not ok:
+            return False
+        self.sa = self.inst  # 业务别名
         self.sa.encoding = 'latin-1'  # 避免仪器返回非ASCII字节时解码失败
 
-        idn = self.query(self.CMD['idn']).strip()
+        idn = self._idn
         self.log(f"[频谱仪] 已连接：{idn}")
 
         self.write(":CALC:MARK1:MODE NORM")        # 普通标记模式（必须）
@@ -316,15 +329,11 @@ class SingleFrequency:
         self.write(":UNIT:POW DBM")          # 纵轴刻度单位设置为DBM
         self.log("[频谱仪] 纵轴刻度单位已设置为DBM")
 
-        return idn
+        return True
 
     def close(self):
-        try:
-            if self.sa:
-                self.sa.close()
-        finally:
-            if self.rm:
-                self.rm.close()
+        super().close()
+        self.sa = None
 
     def write(self, scpi):
         self.sa.write(scpi)
@@ -563,11 +572,7 @@ class PeakDetector:
     def save_csv_png(self, x, y, peaks, out_dir, name, rbw_hz=1e3):
         os.makedirs(out_dir, exist_ok=True)
         csv_path = os.path.join(out_dir, f'{name}.csv')
-        with open(csv_path, 'w', newline='') as f:
-            w = csv.writer(f)
-            w.writerow(['Frequency(Hz)', 'Power(dBm)'])
-            for xi, yi in zip(x, y):
-                w.writerow([xi, yi])
+        write_xy_csv(csv_path, x, y)
         peak_csv = os.path.join(out_dir, f'{name}_peaks.csv')
         with open(peak_csv, 'w', newline='') as f:
             w = csv.writer(f)
@@ -625,17 +630,9 @@ class PeakDetector:
 
 
 # ===============  GUI & 流程编排  ===============
-class SingleFrequencyGUI:
+class SingleFrequencyGUI(BaseTestGUI):
     def __init__(self, parent=None):
-        self.parent = parent
-
-        if parent is None:
-            self.root = tk.Tk()
-            self.root.title("单频")
-            self.root.geometry("1320x950")
-            self.root.resizable(True, True)
-        else:
-            self.root = parent
+        super().__init__(parent, title="单频", geometry="1320x950")
 
         self.params_1um = {
             # 仪器 & 输出
@@ -698,9 +695,7 @@ class SingleFrequencyGUI:
         self.test_type_var = tk.StringVar(value="1μm")
 
         self._build_ui()
-        self.stop_flag = threading.Event()
         self.pause_flag = threading.Event()
-        self.worker = None
 
         # 统计计数器
         self.current_cycle_count = 0
@@ -821,14 +816,6 @@ class SingleFrequencyGUI:
         self.log_box = tk.Text(logf)
         self.log_box.pack(fill=tk.BOTH, expand=True)
 
-    def _safe_log_append(self, text):
-        self.log_box.insert(tk.END, text)
-        self.log_box.see(tk.END)
-
-    def log(self, msg):
-        t = time.strftime('[%H:%M:%S]')
-        self.root.after(0, lambda: self._safe_log_append(f"{t} {msg}\n"))
-
     def update_stats(self):
         """更新统计数据显示"""
         for var_name, label in self.stats_labels.items():
@@ -937,13 +924,8 @@ class SingleFrequencyGUI:
                 raise KeyboardInterrupt
 
     def start(self):
-        if self.worker and self.worker.is_alive():
-            messagebox.showinfo('提示', '测试已在进行中')
-            return
         self._save_params()
-        self.stop_flag.clear()
-        self.worker = threading.Thread(target=self._run, daemon=True)
-        self.worker.start()
+        self.start_worker(self._run)
 
     def stop(self):
         self.stop_flag.set()
@@ -1034,16 +1016,9 @@ class SingleFrequencyGUI:
         os.makedirs(out_dir, exist_ok=True)
 
         # 清空输出文件夹
-        if os.path.exists(out_dir):
-            self.log(f"[测试] 正在清空输出文件夹: {out_dir}")
-            for item in os.listdir(out_dir):
-                item_path = os.path.join(out_dir, item)
-                if os.path.isfile(item_path):
-                    os.remove(item_path)
-                elif os.path.isdir(item_path):
-                    import shutil
-                    shutil.rmtree(item_path)
-            self.log(f"[测试] 输出文件夹清空完成")
+        self.log(f"[测试] 正在清空输出文件夹: {out_dir}")
+        clear_directory(out_dir, log_func=self.log)
+        self.log(f"[测试] 输出文件夹清空完成")
 
         # 获取测试时长参数
         test_duration_min = float(p.get('测试时长(分钟)', 30.0))
@@ -1063,7 +1038,7 @@ class SingleFrequencyGUI:
             # 连接设备
             lc.open()
             self.lc = lc
-            sa.open()
+            sa.connect()
             sa.set_avg(on=True, count=2)
 
             # 启动异步实时参数刷新：后台线程做串口 IO，GUI 线程只消费队列
@@ -1360,9 +1335,6 @@ class SingleFrequencyGUI:
                 # 重置实时参数标签为 "--"
                 for key in self.realtime_labels:
                     self.realtime_labels[key].config(text="--")
-
-    def run(self):
-        self.root.mainloop()
 
     def _on_test_type_change(self, event=None):
         if self.test_type_var.get() == "1μm":

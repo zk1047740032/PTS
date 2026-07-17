@@ -1,35 +1,41 @@
-import pyvisa
-import time
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+SpectrumSNR — 光谱信噪比测量程序
+
+两层架构（仪器 / GUI）：
+    SpectrumSNR(VisaInstrument)  —— 光谱仪控制 + SNR 测量 + 数据保存
+    SpectrumSNRGUI(BaseTestGUI)   —— 参数面板 + 按钮 + 日志 + 线程调度
+"""
+from __future__ import annotations
+
 import os
+import time
 import csv
+import threading
 import numpy as np
 import tkinter as tk
 from tkinter import messagebox, filedialog
 from PIL import Image, ImageTk, ImageDraw, ImageFont
-import ctypes
-import threading
 
-# 启用DPI感知，解决高DPI屏幕下界面模糊问题
-if os.name == 'nt':
-    try:
-        # 设置进程DPI感知
-        ctypes.windll.shcore.SetProcessDpiAwareness(1)
-        # 获取系统DPI
-        dpi = ctypes.windll.user32.GetDpiForSystem()
-        # 设置缩放因子
-        scaling_factor = dpi / 96.0
-    except Exception:
-        scaling_factor = 1.0
-else:
-    scaling_factor = 1.0
+import sys, pathlib
+# 确保能 import core（脚本独立运行时不以包形式组织）
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
+from core import (
+    VisaInstrument,
+    BaseTestGUI,
+    visa_address,
+    clear_directory,
+    append_row_csv,
+)
 
 # ============ SpectrumSNR 类 ============
-class SpectrumSNR:
+class SpectrumSNR(VisaInstrument):
     def __init__(self, params, log_func):
+        timeout_s = float(params.get("VISA_TIMEOUT_S", 20))  # 默认 20 秒
+        super().__init__(log_func=log_func, timeout_ms=int(timeout_s * 1000))
         self.params = params
-        self.log = log_func
-        self.rm = None
-        self.osa = None
+        self.osa = None  # self.inst 的业务别名
 
     # --- 小工具：带重试的查询 ---
     def _query(self, cmd, retries=3, delay=0.4):
@@ -54,22 +60,21 @@ class SpectrumSNR:
         self.log(f"[光谱仪] {label} 已完成")
 
     # 连接仪器
-    def connect_instrument(self):
-        self.rm = pyvisa.ResourceManager()
+    def connect(self):
         self.log("[光谱仪] 正在连接...")
-        OSA_ADDR = f"TCPIP::{self.params['OSA_IP']}::INSTR"
-        self.osa = self.rm.open_resource(OSA_ADDR)
-        timeout_s = float(self.params.get("VISA_TIMEOUT_S", 20))  # 默认 20 秒
-        self.osa.timeout = int(timeout_s * 1000)  # 转换为毫秒
-        self.osa.write_termination = "\n"
-        self.osa.read_termination = "\n"
-        idn = self._query("*IDN?")
+        ip = self.params['OSA_IP']
+        ok = super().connect(visa_address(ip, kind="tcpip_instr"), idn=True)
+        if not ok:
+            return False
+        self.osa = self.inst  # 业务别名指向同一资源对象
+        idn = self._idn
         self.log(f"[光谱仪] 已连接：{idn}")
 
         # ✅ 做一次零点校准
         self.log("[光谱仪] 开始零点校准...")
-        self.osa.write(":SYSTem:ZERO:STARt")
+        self.inst.write(":SYSTem:ZERO:STARt")
         self._opc_wait("零点校准")
+        return True
 
     # 配置光谱仪
     def configure_osa(self):
@@ -171,9 +176,7 @@ class SpectrumSNR:
     def save_data(self, snr, filename_base="spectrum_snr"):
         os.makedirs(self.params["OUTPUT_DIR"], exist_ok=True)
         csv_path = os.path.join(self.params["OUTPUT_DIR"], f"{filename_base}.csv")
-        with open(csv_path, mode="w", newline="") as f:
-            writer = csv.writer(f)
-            writer.writerow([f"{snr:.2f}"])
+        append_row_csv(csv_path, [f"{snr:.2f}"])
         self.log(f"[保存] 结果已保存到：{csv_path}")
         return csv_path
 
@@ -185,7 +188,7 @@ class SpectrumSNR:
                 save_path = os.path.join(self.params["OUTPUT_DIR"], "spectrum.bmp")
 
             # 设置长一点的超时，比如 180 秒
-            self.osa.timeout = 180000  
+            self.osa.timeout = 180000
 
             # 1. 在仪器里保存截图到内部存储（BMP 格式）
             self.osa.write(':MMEMory:STORe:GRAPhics COLor,BMP,"spectrum",INT')
@@ -222,7 +225,7 @@ class SpectrumSNR:
         except Exception as e:
             self.log(f"[错误] 截图保存失败: {e}")
             return None
-        
+
     # 保存完整曲线
     def save_curve(self, wl, power, filename_base="spectrum_curve"):
         os.makedirs(self.params["OUTPUT_DIR"], exist_ok=True)
@@ -236,25 +239,16 @@ class SpectrumSNR:
         return csv_path
 
     def close(self):
-        try:
-            if self.osa:
-                self.osa.close()
-        finally:
-            if self.rm:
-                self.rm.close()
+        """关闭仪器连接，清理业务别名"""
+        super().close()
+        self.osa = None
 
-# ============ GUI 类 (修改版) ============
-class SpectrumSNRGUI:
+
+# ============ GUI 类 ============
+class SpectrumSNRGUI(BaseTestGUI):
     def __init__(self, parent=None):
-        self.parent = parent
-        
-        if parent is None:
-            self.root = tk.Tk()
-            self.root.title("信噪比 - 独立模式")
-            self.root.geometry("1250x370") 
-            self.root.resizable(True, True)
-        else:
-            self.root = parent
+        super().__init__(parent, title="信噪比 - 独立模式",
+                         geometry="1250x370")
 
         self.params = {
             "OSA_IP": "192.168.7.14",
@@ -276,24 +270,15 @@ class SpectrumSNRGUI:
 
         self.create_widgets()
 
-    # --- 修改 1: 线程安全的日志记录 ---
-    def log(self, msg):
-        # 定义一个在主线程执行的内部函数
-        def _log_in_main():
-            t = time.strftime("[%H:%M:%S]")
-            self.log_box.insert(tk.END, f"{t} {msg}\n")
-            self.log_box.see(tk.END)
-        
-        # 使用 after 将任务放入主线程队列，这样子线程调用 log 也不会崩
-        self.root.after(0, _log_in_main)
+    # log() 复用基类 BaseTestGUI.log（线程安全，root.after 异步写入 log_box）
 
     def create_widgets(self):
         main_frame = tk.Frame(self.root)
         main_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
-        
+
         left_frame = tk.Frame(main_frame)
         left_frame.grid(row=0, column=0, sticky="n", padx=(0, 5))
-        
+
         param_frame = tk.LabelFrame(left_frame, text="参数设置", padx=10, pady=10)
         param_frame.pack(fill=tk.X, padx=0, pady=0)
 
@@ -311,11 +296,11 @@ class SpectrumSNRGUI:
         btn_frame.pack(fill=tk.X, padx=0, pady=8)
         inner_btn_frame = tk.Frame(btn_frame)
         inner_btn_frame.pack(anchor='center')
-        
+
         # 保存按钮引用，以便禁用/启用
         self.btn_save = tk.Button(inner_btn_frame, text="保存参数", command=self.update_params, bg="#f4a236", fg="#FFFFFF", width=12, cursor="hand2")
         self.btn_save.pack(side=tk.LEFT, padx=6)
-        
+
         self.btn_start = tk.Button(inner_btn_frame, text="开始测试", command=self.start_test, bg="#4CAF50", fg="#FFFFFF", width=12, cursor="hand2")
         self.btn_start.pack(side=tk.LEFT, padx=6)
 
@@ -323,7 +308,7 @@ class SpectrumSNRGUI:
         log_frame.grid(row=0, column=1, sticky="nsew", padx=(5, 0))
         self.log_box = tk.Text(log_frame)
         self.log_box.pack(fill=tk.BOTH, expand=True)
-        
+
         main_frame.grid_columnconfigure(0, weight=0)
         main_frame.grid_columnconfigure(1, weight=1)
         main_frame.grid_rowconfigure(0, weight=1)
@@ -341,22 +326,7 @@ class SpectrumSNRGUI:
                 self.params[k] = v
         self.log(f"[参数] 中心波长：{self.params['CENTER']}nm | 扫描范围：{self.params['SPAN']}nm")
 
-    def clear_dir(self, OUTPUT_DIR):
-        dir = OUTPUT_DIR
-        if os.path.exists(dir):
-            for f in os.listdir(dir):
-                fp = os.path.join(dir, f)
-                try:
-                    if os.path.isfile(fp) or os.path.islink(fp):
-                        os.remove(fp)
-                    elif os.path.isdir(fp):
-                        import shutil
-                        shutil.rmtree(fp)
-                except Exception as e:
-                    self.log(f"[警告] 删除 {fp} 失败: {e}")
-        self.log("[主机] 已清空文件夹")
-
-    # --- 修改 2: 点击按钮只启动线程 ---
+    # --- 点击按钮只启动线程 ---
     def start_test(self):
         # 1. 禁用按钮，防止重复点击
         self.btn_start.config(state="disabled", text="测试中...")
@@ -367,18 +337,21 @@ class SpectrumSNRGUI:
         thread.daemon = True  # 设置为守护线程，主程序关闭时它也会关闭
         thread.start()
 
-    # --- 修改 3: 实际的耗时逻辑放在这里 ---
+    # --- 实际的耗时逻辑放在这里 ---
     def run_measurement_thread(self):
         osa = SpectrumSNR(self.params, self.log) # 注意：这里的 log 已经是线程安全的了
         try:
-            osa.connect_instrument()
-            self.clear_dir(self.params["OUTPUT_DIR"])
+            if not osa.connect():
+                self.log("[错误] 无法连接光谱仪")
+                return
+            clear_directory(self.params["OUTPUT_DIR"], log_func=self.log)
+            self.log("[主机] 已清空文件夹")
             osa.configure_osa()
             snr, wl, power = osa.measure_snr()
             osa.save_data(snr)
-            osa.save_curve(wl, power) 
+            osa.save_curve(wl, power)
             screenshot = osa.save_screenshot(snr_value=snr)
-            
+
             if screenshot:
                 # 弹窗必须在主线程显示，否则报错
                 self.root.after(0, lambda: self.show_image_popup(screenshot, snr))
@@ -390,13 +363,13 @@ class SpectrumSNRGUI:
             # 恢复按钮状态（也要在主线程做）
             self.root.after(0, self.restore_ui_state)
 
-    # --- 修改 4: 恢复界面状态 ---
+    # --- 恢复界面状态 ---
     def restore_ui_state(self):
         self.btn_start.config(state="normal", text="开始测试")
         self.btn_save.config(state="normal")
         self.log("[系统] 测试流程结束，仪器已释放。")
         # 一键测试模式：自动关闭窗口，触发进程退出
-        self.root.after(2000, self.root.destroy)
+        self.auto_close(2000)
 
     def show_image_popup(self, img_path, snr_value):
         # 注意：此函数由 root.after 调用，已经运行在主线程，可以安全操作 UI
@@ -450,9 +423,7 @@ class SpectrumSNRGUI:
         except Exception as e:
             self.log(f"[UI错误] 无法显示图片: {e}")
 
-    def run(self):
-        if self.root.winfo_exists():
-            self.root.mainloop()
+    # run() 复用基类 BaseTestGUI.run（启动 mainloop）
 
 
 # ============ 程序入口 ============

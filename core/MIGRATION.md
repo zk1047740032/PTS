@@ -63,10 +63,10 @@
 | path_a/Power.py | PowerMeterController | PowerGUI | done | PowerCollector/burnin 纯计算保留；connect 保留子类实现不设终止符 |
 | path_a/PhaseNoise.py | (无仪器,用 pywinauto) | PhaseNoiseGUI | done | click_button 模块级函数；无 VISA，只用 BaseTestGUI；start_test 保留自定义 |
 | path_a/LightSwitch.py | OpticalSwitch | (无GUI) | done | USB VISA 完整地址透传；connect 传 idn=False 后用 get_channel 自行验证(零行为变更) |
-| path_a/LineWidth_FSV3004.py | SignalGenerator, LinewidthTester | LineWidth_FSV3004_GUI | todo | **SignalGenerator 与 path_b 重复**，迁移后可消除 |
-| path_a/SingleFrequency.py | DFBLaserController(serial), SingleFrequency(VISA) | SingleFrequencyGUI | todo | DFB 是 serial 非 VISA，不继承 VisaInstrument；双线程编排 |
-| path_a/SpectrumSNR.py | SpectrumSNR | (GUI 在别处?) | todo | 需确认是否有 GUI 类 |
-| path_a/TimeDomain.py | TimeDomain | (GUI 在别处?) | todo | 连示波器+信号源两台仪器 |
+| path_a/LineWidth_FSV3004.py | SignalGenerator, LinewidthTester | LineWidth_FSV3004_GUI | done | SignalGenerator/LinewidthTester 继承 VisaInstrument；GUI 继承 BaseTestGUI；SignalGenerator 与 path_b 重复，后续可消除 |
+| path_a/SingleFrequency.py | DFBLaserController(serial), SingleFrequency(VISA) | SingleFrequencyGUI | done | DFB serial 不继承；SingleFrequency→VisaInstrument；GUI→BaseTestGUI；双线程编排+PeakDetector用write_xy_csv |
+| path_a/SpectrumSNR.py | SpectrumSNR | SpectrumSNRGUI | done | connect 使用 visa_address(tcpip_instr)；截图保留 MMEM:STORe:GRAPhics BMP 原逻辑(非 HCOPy PNG)；GUI 线程简单直接编排未套 Runner |
+| path_a/TimeDomain.py | TimeDomain | TimeDomainGUI | done | 双仪器：scope→VisaInstrument(主)，gen 手动管理；GUI→BaseTestGUI |
 | path_b/WaveLength.py | SignalGenerator, WavemeterController, WlmController | WaveLengthTestGUI | todo | **SignalGenerator 与 path_a 重复**；WavemeterController 走 wlmData DLL 非 VISA |
 
 ---
