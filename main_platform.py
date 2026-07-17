@@ -164,19 +164,20 @@ def run_module_process(module_name, start_method, msg_queue, cmd_queue):
 MODULE_MAP = {
     "Rin_FSV3004": {"start_method": "start_rin", "group": "ch3"},
     "线宽_FSV3004": {"start_method": "start_measurement", "group": "ch3"},
-    "时域": {"start_method": "start_test", "group": "ch3"},
+    "时域": {"start_method": "start_test", "group": "ch2"},
     "信噪比": {"start_method": "start_test", "group": "ch3"},
-    "单频": {"start_method": "start", "group": "ch1"},
-    "功率": {"start_method": "start_collect", "group": "ch3"},
-    "PZT调制": {"start_method": "start_test", "group": "path_b"},
-    "相噪": {"start_method": "start_test", "group": "ch2"},
+    "单频": {"start_method": "start", "group": "ch3"},
+    "功率": {"start_method": "start_collect", "group": "path_b"},
+    "PZT调制": {"start_method": "start_test", "group": "ch1"},
+    "相噪": {"start_method": "start_test", "group": "ch4"},
 }
 
 MODULE_GROUPS = {
     "光路A": {
-        "通道3": [name for name, info in MODULE_MAP.items() if info["group"] == "ch3"],
+        "通道1": [name for name, info in MODULE_MAP.items() if info["group"] == "ch1"],
         "通道2": [name for name, info in MODULE_MAP.items() if info["group"] == "ch2"],
-        "通道1": [name for name, info in MODULE_MAP.items() if info["group"] == "ch1"]
+        "通道3": [name for name, info in MODULE_MAP.items() if info["group"] == "ch3"],
+        "通道4": [name for name, info in MODULE_MAP.items() if info["group"] == "ch4"]
     },
     "光路B": [name for name, info in MODULE_MAP.items() if info["group"] == "path_b"],
 }
@@ -718,11 +719,11 @@ class IntegratedPlatform:
         按通道顺序编排光路A的测试（在后台线程中运行）
 
         Args:
-            channel_groups: {"ch3": [...], "ch2": [...], "ch1": [...]}
+            channel_groups: {"ch1": [...], "ch2": [...], "ch3": [...], "ch4": [...]}
         """
-        channel_map = {"ch3": 3, "ch2": 2, "ch1": 1}
+        channel_map = {"ch1": 1, "ch2": 2, "ch3": 3, "ch4": 4}
 
-        for group_key in ["ch3", "ch2", "ch1"]:
+        for group_key in ["ch1", "ch2", "ch3", "ch4"]:
             modules = channel_groups.get(group_key, [])
             if not modules:
                 continue
