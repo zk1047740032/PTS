@@ -10,6 +10,7 @@ import traceback
 import multiprocessing
 from queue import Empty
 from utils.LightSwitch import OpticalSwitch
+from utils.test_result_dialog import TestResultDialog
 # ==========================================
 # 动态导入辅助函数
 # ==========================================
@@ -271,11 +272,11 @@ class IntegratedPlatform:
                                 command=self.open_selected_windows, cursor="hand2")
         self.btn_open.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=2)
 
-        # 生成报告
-        self.btn_report = tk.Button(bottom_frame, text="生成报告", 
+        # 测试结果
+        self.btn_result = tk.Button(bottom_frame, text="测试结果",
                                     bg="#FF9900", fg="white", font=("微软雅黑", 9, "bold"),
-                                    command=self.on_generate_report, cursor="hand2")
-        self.btn_report.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=2)
+                                    command=self.show_test_result_dialog, cursor="hand2")
+        self.btn_result.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=2)
         
         # 一键测试按钮
         self.btn_run = tk.Button(bottom_frame, text="一键测试", 
@@ -706,11 +707,11 @@ class IntegratedPlatform:
                 self.start_module_process(name, auto_start=True)
             time.sleep(0.1)
 
-        # 光路A（ch3/ch2/ch1）：后台线程按通道顺序编排
-        channel_modules = {k: v for k, v in channel_groups.items() if k != "path_b"}
+        # 光路A（ch3/ch2/ch1/ch4）：后台线程按通道顺序编排
+        # 传递完整 channel_groups（含 path_b），编排线程在所有测试完成后弹出结果窗口
         threading.Thread(
             target=self._orchestrate_channel_tests,
-            args=(channel_modules,),
+            args=(channel_groups,),
             daemon=True
         ).start()
 
@@ -718,8 +719,11 @@ class IntegratedPlatform:
         """
         按通道顺序编排光路A的测试（在后台线程中运行）
 
+        光路A各通道通过光开关串行执行，每个通道内的模块并行启动后等待全部完成。
+        通道循环结束后等待光路B模块，最后弹出测试结果窗口。
+
         Args:
-            channel_groups: {"ch1": [...], "ch2": [...], "ch3": [...], "ch4": [...]}
+            channel_groups: {"ch1": [...], "ch2": [...], "ch3": [...], "ch4": [...], "path_b": [...]}
         """
         channel_map = {"ch1": 1, "ch2": 2, "ch3": 3, "ch4": 4}
 
@@ -762,9 +766,19 @@ class IntegratedPlatform:
             self._wait_for_modules(modules)
             self.log("SYSTEM", f"========== 通道 {channel_num} 测试完成 ==========", "completed")
 
+        # 等待光路B模块（在 run_selected_tests 中已先行启动）
+        path_b_modules = channel_groups.get("path_b", [])
+        if path_b_modules:
+            self._wait_for_modules(path_b_modules)
+
         # 全部完成，恢复按钮
         self.root.after(0, lambda: self.btn_run.config(state="normal", text="一键测试"))
         self.log("SYSTEM", "所有通道测试完成", "completed")
+
+        # 弹出测试结果窗口
+        self.root.after(0, lambda: TestResultDialog.show(
+            self.root, on_generate_report=self.on_generate_report
+        ))
 
     def _wait_for_modules(self, module_names: list):
         """
@@ -919,8 +933,16 @@ class IntegratedPlatform:
                     # 取消勾选必须触发回调，因为需要通过它来关闭正在运行的进程
                     self.on_test_item_checked(name)
 
-    def on_generate_report(self):
-        """点击生成报告的逻辑"""
+    def show_test_result_dialog(self):
+        """打开测试结果弹窗"""
+        TestResultDialog.show(self.root, on_generate_report=self.on_generate_report)
+
+    def on_generate_report(self, on_done=None):
+        """点击生成报告的逻辑
+
+        Args:
+            on_done: 可选回调，报告生成完成后调用（用于调用方恢复按钮状态等）
+        """
         # 数据采集已抽至 report.data_collector 模块
         from report.data_collector import assemble_report_data
         report_data = assemble_report_data()
@@ -938,8 +960,6 @@ class IntegratedPlatform:
         import threading
         def _generate_task():
             try:
-                self.btn_report.config(state="disabled", text="生成中...")
-
                 from report.template_generator import generate_report
                 generate_report(template_path, output_path, report_data)
 
@@ -948,7 +968,8 @@ class IntegratedPlatform:
                 self.root.after(0, lambda e=e: self.log("错误", f"报告生成失败:\n{str(e)}"))
                 self.root.after(0, lambda e=e: self.log("SYSTEM", f"报告生成失败: {str(e)}", "error"))
             finally:
-                self.root.after(0, lambda: self.btn_report.config(state="normal", text="生成报告"))
+                if on_done:
+                    self.root.after(0, on_done)
 
         threading.Thread(target=_generate_task, daemon=True).start()
 
