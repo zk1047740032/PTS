@@ -798,7 +798,7 @@ class LineWidth_FSV3004_GUI(BaseTestGUI):
 
             except Exception as e:
                 self.log(f"[错误] 测试失败：{e}")
-                self.root.after(0, lambda err=str(e): messagebox.showerror('错误', err))
+                self.root.after(0, lambda err=str(e): self.log('错误', err))
             finally:
                 # 关闭连接
                 if self.tester:
@@ -937,7 +937,7 @@ class LineWidth_FSV3004_GUI(BaseTestGUI):
                     img_label.current_img.save(save_path)
                     messagebox.showinfo("保存成功", f"图片已保存到：{save_path}")
                 except Exception as ex:
-                    messagebox.showerror("保存失败", str(ex))
+                    self.log("保存失败", str(ex))
 
         # 列表框选择事件
         listbox.bind('<<ListboxSelect>>', show_selected_image)
@@ -1011,7 +1011,7 @@ class LineWidth_FSV3004_GUI(BaseTestGUI):
                     win.orig_img.save(save_path)
                     messagebox.showinfo("保存成功", f"图片已保存到：{save_path}")
                 except Exception as ex:
-                    messagebox.showerror("保存失败", str(ex))
+                    self.log("保存失败", str(ex))
 
         # 关闭窗口按钮
         def _close_window():

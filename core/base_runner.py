@@ -112,7 +112,7 @@ class BaseTestRunner:
             self.log(f"[错误] 测试失败：{e}\n{tb}")
             if self.gui is not None:
                 self.gui.root.after(
-                    0, lambda err=str(e): messagebox.showerror("错误", err)
+                    0, lambda err=str(e): self.log("错误", err)
                 )
         finally:
             self.cleanup()

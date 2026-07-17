@@ -960,7 +960,7 @@ class SingleFrequencyGUI(BaseTestGUI):
                     win.orig_img.save(save_path)
                     messagebox.showinfo("保存成功", f"图片已保存到：{save_path}")
                 except Exception as ex:
-                    messagebox.showerror("保存失败", str(ex))
+                    self.log("保存失败", str(ex))
         tk.Button(btn_frame, text="保存图片", command=_save_img).pack()
         tk.Label(win, image=win.img_tk).pack(padx=6, pady=6)
         win.update_idletasks()
@@ -1281,7 +1281,7 @@ class SingleFrequencyGUI(BaseTestGUI):
             self.root.after(0, lambda: messagebox.showinfo('已停止', '已根据请求停止扫描。'))
         except Exception as e:
             self.log(f'[错误] 测试失败：{e}')
-            self.root.after(0, lambda err=str(e): messagebox.showerror('错误', err))
+            self.root.after(0, lambda err=str(e): self.log('错误', err))
         finally:
             # 先停止实时参数刷新后台线程，避免与恢复/关闭操作抢串口
             try:
@@ -1335,6 +1335,9 @@ class SingleFrequencyGUI(BaseTestGUI):
                 # 重置实时参数标签为 "--"
                 for key in self.realtime_labels:
                     self.realtime_labels[key].config(text="--")
+
+            # 一键测试模式：自动关闭窗口，触发进程退出
+            self.auto_close(3000)
 
     def _on_test_type_change(self, event=None):
         if self.test_type_var.get() == "1μm":

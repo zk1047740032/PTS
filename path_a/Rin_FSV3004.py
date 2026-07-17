@@ -754,7 +754,7 @@ class BackgroundNoiseTest(BaseTestRunner):
                 except Exception:
                     pass
             else:
-                messagebox.showerror("错误", "无法连接到仪器")
+                self.log("错误", "无法连接到仪器")
         except Exception as e:
             self.log(f"[Background Exception] {e}\n{traceback.format_exc()}")
         finally:
@@ -847,11 +847,11 @@ class BackgroundNoiseTest(BaseTestRunner):
                     img.save(save_path)
                     messagebox.showinfo("成功", f"图像已保存到 {save_path}")
                 except Exception as e:
-                    messagebox.showerror("保存失败", f"保存图片时出错: {e}")
+                    self.log("保存失败", f"保存图片时出错: {e}")
 
         def save_data():
             if not os.path.exists(local_dat_path):
-                messagebox.showerror("错误", "数据文件不存在")
+                self.log("错误", "数据文件不存在")
                 return
 
             # 根据类型设置默认文件名
@@ -868,7 +868,7 @@ class BackgroundNoiseTest(BaseTestRunner):
                     shutil.copy2(local_dat_path, save_path)
                     messagebox.showinfo("成功", f"数据已保存到 {save_path}")
                 except Exception as e:
-                    messagebox.showerror("保存失败", f"保存数据时出错: {e}")
+                    self.log("保存失败", f"保存数据时出错: {e}")
 
         # 创建按钮框架来放置两个按钮
         btn_frame = tk.Frame(top_frame)
@@ -1086,7 +1086,7 @@ class RinGUI(BaseTestGUI):
                 self.params["dc_initial"] = new_dc
                 messagebox.showinfo("信息", f"已设置 DC 初始为 {new_dc}")
         except Exception as e:
-            messagebox.showerror("错误", f"设置 DC 值失败: {e}")
+            self.log("错误", f"设置 DC 值失败: {e}")
 
     # 诊断连接（快速尝试连接，不会改变任何测量逻辑）
     def connect_instrument(self):
@@ -1295,10 +1295,10 @@ class RinGUI(BaseTestGUI):
             p = self.get_params()
             save_dir = p.get("save_path") or self.params.get("save_path")
             if not save_dir:
-                messagebox.showerror("错误", "未配置保存路径")
+                self.log("错误", "未配置保存路径")
                 return
             if not os.path.isdir(save_dir):
-                messagebox.showerror("错误", f"保存目录不存在: {save_dir}")
+                self.log("错误", f"保存目录不存在: {save_dir}")
                 return
 
             renamed = []

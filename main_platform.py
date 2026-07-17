@@ -446,7 +446,7 @@ class IntegratedPlatform:
                 import subprocess
                 subprocess.Popen(['xdg-open', file_path])
         except Exception as e:
-            messagebox.showerror("错误", f"无法打开文件:\n{file_path}\n\n{str(e)}")
+            self.log("错误", f"无法打开文件:\n{file_path}\n\n{str(e)}")
 
     def on_test_item_checked(self, module_name):
         """
@@ -686,7 +686,7 @@ class IntegratedPlatform:
         self.log("SYSTEM", f"准备执行任务: {', '.join(selected)}")
 
         # 按 group 分组
-        channel_groups = {"ch3": [], "ch2": [], "ch1": [], "path_b": []}
+        channel_groups = {"ch1": [], "ch2": [], "ch3": [], "ch4": [], "path_b": []}
         for name in selected:
             group = MODULE_MAP[name]["group"]
             if group in channel_groups:
@@ -890,21 +890,14 @@ class IntegratedPlatform:
 
     def select_all(self):
         """
-        全选当前可见列表中的模块
-        
+        全选所有测试项
+
         功能:
-            - 获取当前激活页签对应的模块列表
-            - 勾选所有模块的复选框
+            - 遍历所有模块，勾选全部复选框
             - 仅设置状态，不触发 on_test_item_checked，避免全选时误触发不需要的逻辑
         """
-        target_modules = self.get_current_module_list()
-        
-        for name in target_modules:
-            if name in self.check_vars:
-                # 仅设置状态，不触发 on_test_item_checked (避免全选时误触发不需要的逻辑)
-                self.check_vars[name].set(True)
-                # 如果需要在勾选时做额外处理，可以解开下面这行，但通常全选只需改变变量
-                # self.on_test_item_checked(name)
+        for name in self.check_vars:
+            self.check_vars[name].set(True)
 
     def deselect_all(self):
         """
@@ -952,7 +945,7 @@ class IntegratedPlatform:
 
                 self.root.after(0, lambda: self.log("SYSTEM", f"{output_path}", "completed", file_path=output_path))
             except Exception as e:
-                self.root.after(0, lambda e=e: messagebox.showerror("错误", f"报告生成失败:\n{str(e)}"))
+                self.root.after(0, lambda e=e: self.log("错误", f"报告生成失败:\n{str(e)}"))
                 self.root.after(0, lambda e=e: self.log("SYSTEM", f"报告生成失败: {str(e)}", "error"))
             finally:
                 self.root.after(0, lambda: self.btn_report.config(state="normal", text="生成报告"))

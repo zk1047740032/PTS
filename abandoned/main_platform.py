@@ -295,7 +295,7 @@ class IntegratedPlatform:
             
         except Exception as e:
             msg = f"无法加载模块 {name}，请检查该文件是否已按要求修改：\n{str(e)}\n{traceback.format_exc()}"
-            messagebox.showerror("加载错误", msg)
+            self.log("加载错误", msg)
             self.check_vars[name].set(False) # 加载失败则取消勾选
 
     def remove_tab(self, name):

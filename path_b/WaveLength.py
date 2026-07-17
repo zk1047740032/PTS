@@ -1067,7 +1067,7 @@ class WaveLengthTestGUI(BaseTestGUI):
 
         except Exception as e:
             self.log(f"[错误] 测试失败: {e}")
-            self.root.after(0, lambda err=str(e): messagebox.showerror('错误', err))
+            self.root.after(0, lambda err=str(e): self.log('错误', err))
         finally:
             if self.signal_gen:
                 self.signal_gen.set_output(False)
