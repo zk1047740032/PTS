@@ -925,7 +925,7 @@ class RinGUI(BaseTestGUI):
 
         # 默认参数（保留原脚本默认路径/IP）
         self.params = {
-            "osa_ip": CFG.network.rin_gui_display,
+            "osa_ip": CFG.network.fsv3004_rin,
             #"osa_port": 5025,
             "save_path": str(CFG.dirs.rin_fsv3004),
             "dc_initial": CFG.rin.dc_initial

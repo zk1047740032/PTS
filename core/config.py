@@ -43,12 +43,6 @@ class NetworkInstruments:
     # 光谱仪
     osa:                str = "192.168.7.14"  # SpectrumSNR 光谱仪
 
-    # Rin GUI 显示用 IP（与实际测量 IP 不同）
-    rin_gui_display:    str = "192.168.7.20"
-
-    # CLI 模式备用地址（不同子网）
-    scope_cli:          str = "192.168.1.10"
-    sig_gen_cli:        str = "192.168.1.20"
 
 
 # ========================== USB / VISA 资源地址 ==============================

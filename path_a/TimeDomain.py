@@ -416,70 +416,7 @@ class TimeDomainGUI(BaseTestGUI):
         tk.Button(button_frame, text="保存图片", command=save_img, cursor="hand2").pack(side=tk.BOTTOM, padx=5)
 
 
-# ============ 命令行模式支持 ============
-def run_command_line():
-    """命令行模式运行测试"""
-    import sys
-
-    # 简单的日志函数
-    def log(msg):
-        print(f"[{time.strftime('%H:%M:%S')}] {msg}")
-
-    # 默认参数
-    params = {
-        "SCOPE_IP": CFG.network.scope_cli,
-        "SCOPE_CH": "CHAN1",
-        "GEN_IP": CFG.network.sig_gen_cli,
-        "GEN_FREQ": 100,
-        "GEN_VOLT": 10,
-        "GEN_OFFSET": 5,
-        "OUTPUT_DIR": r"C:\PTS\zhongzi\TimeDomain"
-    }
-
-    # 创建时域测试对象
-    time_domain = TimeDomain(params, log)
-
-    try:
-        # 连接仪器
-        time_domain.connect_instruments()
-
-        # 获取当前频率
-        freq = params["GEN_FREQ"]
-
-        # 先配置信号源
-        time_domain.configure_gen()
-
-        # 再配置示波器，传递频率参数
-        time_domain.configure_scope(freq)
-
-        # 读取测量结果
-        vavg = time_domain.read_measurement(":MEAS:VAVG?")
-        vpp = time_domain.read_measurement(":MEAS:VPP?")
-        results = {"Vavg(V)": vavg, "Vpp(V)": vpp}
-
-        # 保存数据和截图
-        #time_domain.save_data(results, f"scope_measurement_{freq}Hz")
-        time_domain.save_screenshot(filename=f"scope_screenshot_{freq}Hz.png")
-
-        log("测试完成")
-
-        return 0
-    except Exception as e:
-        log(f"测试失败: {e}")
-        return 1
-    finally:
-        # 关闭连接
-        time_domain.close()
-
-
 # ============ 程序入口 ============
 if __name__ == "__main__":
-    import sys
-    # 检查是否在命令行模式下运行
-    if len(sys.argv) > 1 and sys.argv[1] == "--cli":
-        # 命令行模式
-        sys.exit(run_command_line())
-    else:
-        # GUI模式
-        gui = TimeDomainGUI()
-        gui.run()
+    gui = TimeDomainGUI()
+    gui.run()

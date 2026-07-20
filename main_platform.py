@@ -41,6 +41,8 @@ _BASE_HELP_W        = 650   # 说明文档窗口宽度
 _BASE_HELP_H        = 480    # 说明文档窗口高度
 _BASE_SEED_W        = 390    # 种子参数窗口宽度
 _BASE_SEED_H        = 328    # 种子参数窗口高度
+_BASE_CONFIG_W      = 585    # 配置参数窗口宽度
+_BASE_CONFIG_H      = 620    # 配置参数窗口高度
 
 # ==========================================
 # 模块注册表 —— 新部门只需改这里 + MODULE_MAP + MODULE_GROUPS
@@ -94,6 +96,13 @@ def run_module_process(module_name, start_method, msg_queue, cmd_queue):
         module_path, class_name = MODULE_REGISTRY[module_name]
         mod = importlib.import_module(module_path)
         gui_class = getattr(mod, class_name)
+
+        # 子进程启动时加载用户配置覆盖到 CFG，确保 GUI 显示的是最新参数
+        try:
+            from utils.config_params_panel import apply_user_overrides_to_cfg
+            apply_user_overrides_to_cfg()
+        except Exception:
+            pass
 
         msg_queue.put((module_name, "running", f"正在启动 {module_name} 窗口..."))
 
@@ -224,10 +233,13 @@ class IntegratedPlatform:
         except:
             pass
 
-        self.check_vars = {}     
+        self.check_vars = {}
         self.processes = {}
         self.cmd_queues = {}
-        self.msg_queue = multiprocessing.Queue() 
+        self.msg_queue = multiprocessing.Queue()
+
+        # 加载用户配置覆盖（需在 setup_ui 之前，以便模块窗口读取到覆盖后的 CFG 值）
+        self._load_user_config()
 
         self.setup_ui()
 
@@ -462,7 +474,11 @@ class IntegratedPlatform:
 
         self.btn_seed_params = self._make_secondary_button(
             header, "种子参数", self.show_seed_params)
-        self.btn_seed_params.pack(side=tk.RIGHT)
+        self.btn_seed_params.pack(side=tk.RIGHT, padx=(4, 0))
+
+        self.btn_config_params = self._make_secondary_button(
+            header, "配置参数", self.show_config_params)
+        self.btn_config_params.pack(side=tk.RIGHT, padx=(0, 4))
 
         # ---- 进度条 ----
         self.progress = ttk.Progressbar(panel, mode='determinate')
@@ -749,6 +765,41 @@ class IntegratedPlatform:
         record_btn = ttk.Button(bottom_frame, text="记录",
                                 command=do_record, width=10, cursor="hand2")
         record_btn.pack(side=tk.RIGHT, padx=4)
+
+    def show_config_params(self):
+        """
+        显示配置参数面板
+
+        功能:
+            - 创建弹窗展示 path_a / path_b 下所有 GUI 程序的默认参数
+            - 参数按程序分类，支持在线编辑和保存
+            - 保存后自动写入 config/user_config.json，重启生效
+        """
+        from utils.config_params_panel import ConfigParamsPanel
+
+        config_window = tk.Toplevel(self.root)
+        config_window.title("配置参数")
+        config_window.geometry(f"{dpix(_BASE_CONFIG_W)}x{dpix(_BASE_CONFIG_H)}")
+        config_window.resizable(True, True)
+
+        # 先让窗口壳子显示出来，再构建内容（避免用户感觉卡顿）
+        config_window.update_idletasks()
+
+        # 嵌入配置面板
+        ConfigParamsPanel(config_window)
+
+    def _load_user_config(self):
+        """
+        启动时加载用户配置覆盖
+
+        从 config/user_config.json 读取用户修改过的参数值，
+        通过 object.__setattr__ 写回 CFG（绕过 frozen 限制）。
+        """
+        try:
+            from utils.config_params_panel import apply_user_overrides_to_cfg
+            apply_user_overrides_to_cfg()
+        except Exception:
+            pass  # 配置加载失败不影响主流程
 
     def start_module_process(self, name, auto_start=False):
         """
