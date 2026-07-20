@@ -28,17 +28,18 @@ from core import (
     clear_directory,
     append_row_csv,
 )
+from core.config import CFG
 
 # ============ SpectrumSNR 类 ============
 class SpectrumSNR(VisaInstrument):
     def __init__(self, params, log_func):
-        timeout_s = float(params.get("VISA_TIMEOUT_S", 20))  # 默认 20 秒
+        timeout_s = float(params.get("VISA_TIMEOUT_S", CFG.spectrum_snr.visa_timeout_s))  # 默认 20 秒
         super().__init__(log_func=log_func, timeout_ms=int(timeout_s * 1000))
         self.params = params
         self.osa = None  # self.inst 的业务别名
 
     # --- 小工具：带重试的查询 ---
-    def _query(self, cmd, retries=3, delay=0.4):
+    def _query(self, cmd, retries=CFG.spectrum_snr.query_retries, delay=CFG.spectrum_snr.query_retry_delay_s):
         last_err = None
         for i in range(1, retries + 1):
             try:
@@ -87,7 +88,7 @@ class SpectrumSNR(VisaInstrument):
         self.osa.write(f":SENSe:WAVelength:CENTer {self.params['CENTER']}NM")
         self.osa.write(f":SENSe:WAVelength:SPAN {self.params['SPAN']}NM")
         # 设置灵敏度为HIGH1（根据手册中的正确格式，注意大小写）
-        self.osa.write(":SENSe:SENSe HIGH1")
+        self.osa.write(f":SENSe:SENSe {CFG.spectrum_snr.sensitivity}")
         # 添加读取设置确认
         try:
             sense_value = self.osa.query(":SENSe:SENSe?")
@@ -155,7 +156,7 @@ class SpectrumSNR(VisaInstrument):
         self.log(f"[主峰] {wl1:.3f} nm, {p1:.2f} dBm")
 
         # 4. 在 ±3 nm 以外找次峰
-        mask = (wl < wl1 - 3) | (wl > wl1 + 3)
+        mask = (wl < wl1 - CFG.spectrum_snr.main_peak_exclusion_nm) | (wl > wl1 + CFG.spectrum_snr.main_peak_exclusion_nm)
         if not np.any(mask):
             raise RuntimeError("没有找到 ±3 nm 以外的数据点")
 
@@ -188,7 +189,7 @@ class SpectrumSNR(VisaInstrument):
                 save_path = os.path.join(self.params["OUTPUT_DIR"], "spectrum.bmp")
 
             # 设置长一点的超时，比如 180 秒
-            self.osa.timeout = 180000
+            self.osa.timeout = CFG.timing.visa_extra_long_ms
 
             # 1. 在仪器里保存截图到内部存储（BMP 格式）
             self.osa.write(':MMEMory:STORe:GRAPhics COLor,BMP,"spectrum",INT')
@@ -251,12 +252,12 @@ class SpectrumSNRGUI(BaseTestGUI):
                          geometry="1250x370")
 
         self.params = {
-            "OSA_IP": "192.168.7.14",
-            "OUTPUT_DIR": r"C:\PTS\zhongzi\SpectrumSNR",
-            "CENTER": 1064,
-            "SPAN": 150,
-            "REF_LEVEL": -4.0,
-            "VISA_TIMEOUT_S": 120,
+            "OSA_IP": CFG.network.osa,
+            "OUTPUT_DIR": str(CFG.dirs.spectrum_snr),
+            "CENTER": CFG.spectrum_snr.center_nm,
+            "SPAN": CFG.spectrum_snr.span_nm,
+            "REF_LEVEL": CFG.spectrum_snr.ref_level_dbm,
+            "VISA_TIMEOUT_S": CFG.spectrum_snr.visa_timeout_s,
         }
 
         self.param_labels = {
@@ -369,7 +370,7 @@ class SpectrumSNRGUI(BaseTestGUI):
         self.btn_save.config(state="normal")
         self.log("[系统] 测试流程结束，仪器已释放。")
         # 一键测试模式：自动关闭窗口，触发进程退出
-        self.auto_close(2000)
+        self.auto_close(CFG.timing.auto_close_short_ms)
 
     def show_image_popup(self, img_path, snr_value):
         # 注意：此函数由 root.after 调用，已经运行在主线程，可以安全操作 UI

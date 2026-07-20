@@ -22,6 +22,7 @@ import sys, pathlib
 # 确保能 import core（脚本独立运行时不以包形式组织）
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 from core import BaseTestGUI
+from core.config import CFG
 
 
 def click_button():
@@ -51,7 +52,7 @@ def click_button():
             win.set_focus()
         except Exception:
             pass
-        time.sleep(0.5)
+        time.sleep(CFG.timing.stabilize_0_5s)
 
         win.click_input(coords=(296, 675))
         print("已成功点击目标按钮！(相对坐标: X=296, Y=675)")
@@ -84,7 +85,7 @@ class PhaseNoiseGUI(BaseTestGUI):
         super().__init__(parent, title="PhaseNoise",
                          geometry="1140x420", icon="PreciLasers.ico")
 
-        self.wavelength_path = tk.StringVar(value=r"C:\PTS\zhongzi\WaveLength\wavelength.csv")
+        self.wavelength_path = tk.StringVar(value=str(CFG.dirs.wavelength / "wavelength.csv"))
         self.program_1um = tk.StringVar(value="")
         self.program_1_5um = tk.StringVar(value="")
 
@@ -233,7 +234,7 @@ class PhaseNoiseGUI(BaseTestGUI):
             if wavelength is None:
                 return
 
-            if wavelength >= 1500:
+            if wavelength >= CFG.phase_noise.wavelength_threshold_nm:
                 program_path = self.program_1_5um.get().strip()
                 seed_type = "1.5μm"
             else:
@@ -256,21 +257,21 @@ class PhaseNoiseGUI(BaseTestGUI):
             # 指定 cwd 为程序所在文件夹
             subprocess.Popen([program_path], cwd=program_dir)
             self.log("[启动] 程序已启动，等待窗口加载...")
-            time.sleep(3)
+            time.sleep(CFG.timing.stabilize_3s)
 
-            if not self._interruptible_sleep(2):
+            if not self._interruptible_sleep(CFG.phase_noise.post_launch_wait_s):
                 self.log("[停止] 用户中断测试")
                 return
 
             self.log("[点击] 正在执行点击操作...")
-            max_retries = 3
+            max_retries = CFG.phase_noise.click_retries
             retry_count = 0
             click_success = False
 
             while retry_count < max_retries and not click_success:
                 if retry_count > 0:
                     self.log(f"[重试] 第 {retry_count} 次重试点击操作...")
-                    time.sleep(1)
+                    time.sleep(CFG.phase_noise.click_retry_delay_s)
                 if click_button():
                     click_success = True
                 else:
@@ -286,9 +287,9 @@ class PhaseNoiseGUI(BaseTestGUI):
         finally:
             self.root.after(0, lambda: self.start_btn.config(state=tk.NORMAL))
             # 一键测试模式：自动关闭窗口，触发进程退出
-            self.auto_close(3000)
+            self.auto_close(CFG.timing.auto_close_long_ms)
 
-    def _interruptible_sleep(self, seconds: float, check_interval: float = 0.5) -> bool:
+    def _interruptible_sleep(self, seconds: float, check_interval: float = CFG.phase_noise.check_interval_s) -> bool:
         """
         可中断的睡眠（转调基类 interruptible_sleep，行为与原实现一致）
 

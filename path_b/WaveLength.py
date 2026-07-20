@@ -20,6 +20,7 @@ from pywinauto import Desktop
 
 from drivers import wlmData
 from core import VisaInstrument, BaseTestGUI, visa_address
+from core.config import CFG
 
 # ===============  上位机控制（pywinauto）  ===============
 try:
@@ -30,7 +31,7 @@ except Exception:
     PYW_AVAILABLE = False
 
 class WlmController:
-    def __init__(self, window_title=".*Wavelength Meter.*", log_func=print):
+    def __init__(self, window_title=CFG.wavelength.wlm_window_title, log_func=print):
         self.exe_path = exe_path
         self.window_title = window_title
         self.app = None
@@ -73,9 +74,9 @@ class SignalGenerator(VisaInstrument):
         参数:
             log_callback (callable, optional): 日志回调函数
         """
-        super().__init__(log_func=log_callback, timeout_ms=10000)
+        super().__init__(log_func=log_callback, timeout_ms=CFG.timing.visa_default_ms)
 
-    def connect(self, ip_address: str, max_retries: int = 3, retry_interval: int = 2) -> bool:
+    def connect(self, ip_address: str, max_retries: int = CFG.wavelength.sig_gen_connect_retries, retry_interval: int = CFG.wavelength.sig_gen_connect_interval) -> bool:
         """
         连接信号源（带重试机制）
 
@@ -99,8 +100,8 @@ class SignalGenerator(VisaInstrument):
                 self.log(f"[信号源] 仪器标识: {self._idn}")
         return ok
 
-    def configure(self, waveform: str = "RAMP", freq: float = 0.1,
-                  volt: float = 10.0, offset: float = 5.0) -> bool:
+    def configure(self, waveform: str = CFG.wavelength.sig_gen_default_waveform, freq: float = CFG.wavelength.sig_gen_default_freq,
+                  volt: float = CFG.wavelength.sig_gen_default_volt, offset: float = CFG.wavelength.sig_gen_default_offset) -> bool:
         """
         配置信号源输出参数
 
@@ -234,7 +235,7 @@ class WavemeterController:
             self.log(f"[波长计] 连接异常: {e}")
             return False
 
-    def initialize(self, exposure_ms: int = 2) -> bool:
+    def initialize(self, exposure_ms: int = CFG.wavelength.exposure_ms) -> bool:
         """
         初始化波长计参数
 
@@ -316,7 +317,7 @@ class WavemeterController:
         except Exception:
             return None
 
-    def wait_for_next_event(self, timeout_ms: int = 1000) -> Tuple[bool, Optional[int], Optional[float]]:
+    def wait_for_next_event(self, timeout_ms: int = CFG.wavelength.wait_event_timeout_ms) -> Tuple[bool, Optional[int], Optional[float]]:
         """
         阻塞等待下一个波长计事件（数据更新）
 
@@ -380,23 +381,23 @@ class WaveLengthTestGUI(BaseTestGUI):
         super().__init__(parent, title="PZT调制", geometry="1200x820")
 
         self.params_1um = {
-            '信号源IP': '192.168.7.11',
-            '输出目录': r"C:\PTS\zhongzi\WaveLength",
-            '频率(Hz)': '1',
-            '幅值(mVpp)': '2',
-            '偏置(mVdc)': '100',
-            '变参测试参数': '0.1Hz, 1Vpp, 0.5Vdc\n0.1Hz, 2Vpp, 1Vdc\n0.1Hz, 5Vpp, 2.5Vdc\n0.1Hz, 10Vpp, 5Vdc',
-            '调制时间(秒)': '100',
+            '信号源IP': CFG.network.sig_gen_wavelength,
+            '输出目录': str(CFG.dirs.wavelength),
+            '频率(Hz)': CFG.wavelength.freq_1um,
+            '幅值(mVpp)': CFG.wavelength.volt_1um,
+            '偏置(mVdc)': CFG.wavelength.offset_1um,
+            '变参测试参数': CFG.wavelength.sweep_text,
+            '调制时间(秒)': CFG.wavelength.modulation_time_s,
         }
 
         self.params_1_5um = {
-            '信号源IP': '192.168.7.11',
-            '输出目录': r"C:\PTS\zhongzi\WaveLength",
-            '频率(Hz)': '1.5',
-            '幅值(mVpp)': '4',
-            '偏置(mVdc)': '100',
-            '变参测试参数': '0.1Hz, 1Vpp, 0.5Vdc\n0.1Hz, 2Vpp, 1Vdc\n0.1Hz, 5Vpp, 2.5Vdc\n0.1Hz, 10Vpp, 5Vdc',
-            '调制时间(秒)': '100',
+            '信号源IP': CFG.network.sig_gen_wavelength,
+            '输出目录': str(CFG.dirs.wavelength),
+            '频率(Hz)': CFG.wavelength.freq_1_5um,
+            '幅值(mVpp)': CFG.wavelength.volt_1_5um,
+            '偏置(mVdc)': CFG.wavelength.offset_1_5um,
+            '变参测试参数': CFG.wavelength.sweep_text,
+            '调制时间(秒)': CFG.wavelength.modulation_time_s,
         }
 
         self.test_type_var = tk.StringVar(value="1μm")
@@ -525,7 +526,7 @@ class WaveLengthTestGUI(BaseTestGUI):
                 return False
 
             # 【优化1】改用 win32 后端，搜索速度极快
-            desktop = Desktop(backend="win32")
+            desktop = Desktop(backend=CFG.wavelength.pywinauto_backend)
 
             try:
                 matched_windows = desktop.windows(title_re=window_title_pattern, visible_only=True)
@@ -568,7 +569,7 @@ class WaveLengthTestGUI(BaseTestGUI):
                 self.log(f"[按钮] Pywinauto不可用，跳过点击{button_name}")
                 return False
 
-            desktop = Desktop(backend="win32")
+            desktop = Desktop(backend=CFG.wavelength.pywinauto_backend)
 
             try:
                 # 1. 瞬间找到所有匹配的底层 ElementInfo 对象
@@ -596,7 +597,7 @@ class WaveLengthTestGUI(BaseTestGUI):
             height = rect.bottom - rect.top
 
             # 计算点击位置 (最右侧 "Reset now" 的中心)
-            click_x = width - 40
+            click_x = width - CFG.wavelength.reset_btn_offset_x
             click_y = height // 2
 
             # 使用 click_input 进行物理点击
@@ -617,7 +618,7 @@ class WaveLengthTestGUI(BaseTestGUI):
                 self.log(f"[控件] Pywinauto不可用，跳过点击{control_name}")
                 return False
 
-            desktop = Desktop(backend="win32")
+            desktop = Desktop(backend=CFG.wavelength.pywinauto_backend)
 
             try:
                 matched_windows = desktop.windows(title_re=window_title_pattern, visible_only=True)
@@ -640,8 +641,8 @@ class WaveLengthTestGUI(BaseTestGUI):
             # X轴：整个宽度减去 12 像素（紧贴右边缘）
             # Y轴：从上边缘往下 12 像素
             # （12像素通常是这种16x16或24x24小图标的正中心）
-            click_x = width - 12
-            click_y = 12
+            click_x = width - CFG.wavelength.chart_expand_offset_x
+            click_y = CFG.wavelength.chart_expand_offset_y
 
             # 先移动鼠标过去，停顿0.1秒（让老软件有时间触发悬停效果）
             ctrl.move_mouse_input(coords=(click_x, click_y))
@@ -666,7 +667,7 @@ class WaveLengthTestGUI(BaseTestGUI):
                 self.log("[数据] Pywinauto不可用，跳过数据读取")
                 return False
 
-            desktop = Desktop(backend="win32")
+            desktop = Desktop(backend=CFG.wavelength.pywinauto_backend)
             matched_windows = desktop.windows(title_re=window_title_pattern, visible_only=True)
             if not matched_windows:
                 self.log(f"[数据] 找不到目标窗口: {window_title_pattern}")
@@ -701,7 +702,7 @@ class WaveLengthTestGUI(BaseTestGUI):
 
                 # 将结果保存到 PZT_range.csv
                 import csv
-                csv_path = os.path.join(output_dir, "PZT_range.csv")
+                csv_path = os.path.join(output_dir, CFG.wavelength.pzt_range_filename)
                 with open(csv_path, 'w', newline='', encoding='utf-8') as f:
                     writer = csv.writer(f)
                     writer.writerow(['最小值(THz)', '最大值(THz)', 'PZT_Range(GHz)'])
@@ -727,7 +728,7 @@ class WaveLengthTestGUI(BaseTestGUI):
                 self.log("[面板] Pywinauto不可用，跳过关闭弹窗")
                 return False
 
-            desktop = Desktop(backend="win32")
+            desktop = Desktop(backend=CFG.wavelength.pywinauto_backend)
             matched_windows = desktop.windows(title_re=window_title_pattern, visible_only=True)
             if not matched_windows:
                 self.log(f"[面板] 找不到目标窗口: {window_title_pattern}")
@@ -736,16 +737,16 @@ class WaveLengthTestGUI(BaseTestGUI):
             win = desktop.window(handle=matched_windows[0].handle)
 
             # 1. 获取上方主图表（用于提取顶部的 Y 坐标）
-            top_chart = win.child_window(class_name="TChart", found_index=1)
+            top_chart = win.child_window(class_name="TChart", found_index=CFG.wavelength.top_chart_found_index)
             top_rect = top_chart.rectangle()
 
             # 2. 获取下方功率图表（由于它未缩水，它的右边缘即为弹窗的最右边缘，用于提取 X 坐标）
-            bottom_chart = win.child_window(class_name="TChart", found_index=0)
+            bottom_chart = win.child_window(class_name="TChart", found_index=CFG.wavelength.bottom_chart_found_index)
             bottom_rect = bottom_chart.rectangle()
 
             # 3. 十字交叉定位：下方最右侧向左退 12 像素，上方最顶端向下移 12 像素
-            abs_x = bottom_rect.right - 12
-            abs_y = top_rect.top + 12
+            abs_x = bottom_rect.right - CFG.wavelength.stats_close_offset_x
+            abs_y = top_rect.top + CFG.wavelength.stats_close_offset_y
 
             # 引入全局鼠标控制器，直接进行屏幕绝对坐标的物理点击
             import pywinauto.mouse as mouse
@@ -893,7 +894,7 @@ class WaveLengthTestGUI(BaseTestGUI):
 
             self.log("\n[步骤1] 连接仪器...")
 
-            dll_path = r'C:\Windows\System32\wlmData.dll'
+            dll_path = CFG.sys_paths.wlm_dll
             if not self.wavemeter.load_dll(dll_path):
                 raise Exception("加载wlmData.dll失败")
 
@@ -916,7 +917,7 @@ class WaveLengthTestGUI(BaseTestGUI):
 
             wavelength = self.wavemeter.get_wavelength()
             if wavelength:
-                wavelength_csv_path = os.path.join(output_dir, "wavelength.csv")
+                wavelength_csv_path = os.path.join(output_dir, CFG.wavelength.wavelength_filename)
                 try:
                     with open(wavelength_csv_path, 'w', newline='', encoding='utf-8') as f:
                         writer = csv.writer(f)
@@ -929,21 +930,21 @@ class WaveLengthTestGUI(BaseTestGUI):
                 self.log("[警告] 读取波长失败，未保存波长数据")
 
             self.log("\n[步骤3] 窗口一初始截图...")
-            window1_title = r".*Wavelength Meter.*"
+            window1_title = CFG.wavelength.wlm_window_title
             window1_screenshot_path = os.path.join(output_dir, "波长.png")
             self.capture_window(window1_title, window1_screenshot_path, "窗口一")
 
             self.log("\n[步骤4] Reset...")
-            reset_window_title1 = r".*WLM LongTerm graph.*"
+            reset_window_title1 = CFG.wavelength.longterm_graph_title
             self.click_reset_button(
                 reset_window_title1,
                 "Reset按钮",
                 class_name="TPanel",
-                found_index=1
+                found_index=CFG.wavelength.reset_btn_found_index
             )
 
             self.log("[步骤4.5] 略微延迟")
-            if not self.interruptible_sleep(2):
+            if not self.interruptible_sleep(CFG.timing.stabilize_2s):
                 self.log("[停止] 用户中断测试")
                 return
 
@@ -961,17 +962,17 @@ class WaveLengthTestGUI(BaseTestGUI):
                 raise Exception("打开信号源输出失败")
 
             self.log("[步骤5.5] 略微延迟")
-            if not self.interruptible_sleep(2):
+            if not self.interruptible_sleep(CFG.timing.stabilize_2s):
                 self.log("[停止] 用户中断测试")
                 return
 
             self.log("\n[步骤6] 窗口二初始信号截图...")
-            window2_title = r".*WLM LongTerm graph.*"
+            window2_title = CFG.wavelength.longterm_graph_title
             window2_screenshot_path = os.path.join(output_dir, "初始信号.png")
             self.capture_window(window2_title, window2_screenshot_path, "窗口二")
 
             # self.log("\n[步骤7] Reset...")
-            # reset_window_title2 = r".*WLM LongTerm graph.*"
+            # reset_window_title2 = CFG.wavelength.longterm_graph_title
             # self.click_reset_button(
             #     reset_window_title2,
             #     "Reset按钮",
@@ -979,7 +980,7 @@ class WaveLengthTestGUI(BaseTestGUI):
             #     found_index=1
             # )
 
-            if not self.interruptible_sleep(1):
+            if not self.interruptible_sleep(CFG.timing.stabilize_1s):
                 self.log("[停止] 用户中断测试")
                 return
 
@@ -1016,12 +1017,12 @@ class WaveLengthTestGUI(BaseTestGUI):
 
                 # self.log("[等待] 等待信号稳定（2秒）...")
                 # time.sleep(2)
-                reset_window_title = r".*WLM LongTerm graph.*"
+                reset_window_title = CFG.wavelength.longterm_graph_title
                 self.click_reset_button(
                     reset_window_title,
                     "Reset按钮",
                     class_name="TPanel",
-                    found_index=1
+                    found_index=CFG.wavelength.reset_btn_found_index
                 )
 
                 self.log(f"[等待] 等待调制时间（{collect_time}秒）...")
@@ -1029,7 +1030,7 @@ class WaveLengthTestGUI(BaseTestGUI):
                     self.log("[停止] 用户中断测试")
                     break
 
-                window2_title = r".*WLM LongTerm graph.*"
+                window2_title = CFG.wavelength.longterm_graph_title
                 window2_screenshot_path = os.path.join(output_dir, f"{int(param['volt'])}v.png")
                 self.capture_window(window2_title, window2_screenshot_path, "窗口二")
 
@@ -1039,24 +1040,24 @@ class WaveLengthTestGUI(BaseTestGUI):
 
             self.log("\n[步骤9] 调制流程结束，计算调制范围...")
             # 使用 class_name="TChart" 和 found_index=1 定位上面的频率主图表
-            chart_window_title = r".*WLM LongTerm graph.*"
+            chart_window_title = CFG.wavelength.longterm_graph_title
             self.click_top_right_corner(
                 chart_window_title,
                 "图表展开箭头",
                 class_name="TChart",
-                found_index=1
+                found_index=CFG.wavelength.chart_expand_found_index
             )
 
             # 新增：等待 1.5 秒，确保小弹窗完全展开渲染完毕
             self.log("[等待] 等待稳定...")
-            if not self.interruptible_sleep(1.0):
+            if not self.interruptible_sleep(CFG.timing.wlm_post_read_delay_s):
                 self.log("[停止] 用户中断测试")
                 return
 
             self.log("\n[步骤10] 读取数据并计算调制范围...")
             self.read_and_save_pzt_range(chart_window_title, output_dir)
 
-            if not self.interruptible_sleep(1.0):
+            if not self.interruptible_sleep(CFG.timing.wlm_post_read_delay_s):
                 self.log("[停止] 用户中断测试")
                 return
 
@@ -1076,7 +1077,7 @@ class WaveLengthTestGUI(BaseTestGUI):
             self.root.after(0, lambda: self.start_btn.config(state=tk.NORMAL))
             self.root.after(0, lambda: self.stop_btn.config(state=tk.DISABLED))
             # 一键测试模式：自动关闭窗口，触发进程退出
-            self.auto_close(3000)
+            self.auto_close(CFG.timing.auto_close_long_ms)
 
 
 if __name__ == '__main__':

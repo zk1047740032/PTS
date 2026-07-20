@@ -10,6 +10,9 @@ from datetime import datetime
 import serial
 import serial.tools.list_ports
 
+import sys, pathlib
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
+from core.config import CFG
 
 # ===============  DFB 种子激光器 RS-485 串口控制  ===============
 class DFBLaserController:
@@ -18,16 +21,16 @@ class DFBLaserController:
     CMD_REALTIME = 0xA9   # 实时查询 → 响应 0xB7
     CMD_SYSTEM_INFO = 0xAA  # 系统信息查询 → 响应 0xB0
 
-    def __init__(self, port, addr=100, log_func=print):
+    def __init__(self, port, addr=CFG.serial.device_addr, log_func=print):
         self.port = port
         self.addr = addr
         self.log = log_func
         self.serial = None
         self._lock = threading.Lock()
 
-    def open(self, timeout_s=1.5):
+    def open(self, timeout_s=CFG.serial.timeout_s):
         self.serial = serial.Serial(
-            port=self.port, baudrate=115200, timeout=timeout_s,
+            port=self.port, baudrate=CFG.serial.baudrate, timeout=timeout_s,
             bytesize=serial.EIGHTBITS, parity=serial.PARITY_NONE,
             stopbits=serial.STOPBITS_ONE,
         )
@@ -331,7 +334,7 @@ class SeedParamsPanel:
         import csv
         import os
 
-        save_dir = r'C:\PTS\zhongzi\SeedValue'
+        save_dir = str(CFG.dirs.seed_value)
         os.makedirs(save_dir, exist_ok=True)
         filepath = os.path.join(save_dir, 'seedvalue.csv')
 

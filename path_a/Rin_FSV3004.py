@@ -39,6 +39,7 @@ from core import (
     write_xy_csv,
     read_instrument_screenshot,
 )
+from core.config import CFG
 
 # default_logger 保留以兼容历史调用点；新代码直接用 print 或基类 log
 def default_logger(msg: str):
@@ -67,14 +68,14 @@ class FSV3004Instrument(VisaInstrument):
     """
 
     def __init__(self, log_func=default_logger):
-        super().__init__(log_func=log_func, timeout_ms=60000)
+        super().__init__(log_func=log_func, timeout_ms=CFG.timing.visa_medium_ms)
         self.instrument = None  # self.inst 的业务别名
-        self.ip_address = "192.168.7.10"
+        self.ip_address = CFG.network.fsv3004_rin
 
     # ------------------------------------------------------------------
     # 连接 / 释放
     # ------------------------------------------------------------------
-    def connect(self, ip_address="192.168.7.10"):
+    def connect(self, ip_address=CFG.network.fsv3004_rin):
         """
         连接频谱分析仪（VXI-11 协议，可读写二进制数据）
 
@@ -245,16 +246,9 @@ class RinTest(BaseTestRunner):
     def __init__(self, gui=None, log_func=None):
         super().__init__(gui=gui, log_func=log_func)
         self.instrument: Optional[FSV3004Instrument] = None
-        self.dc_value = 1.20  # 默认DC值
-        self.amplification = 14
-        self.file_paths = [
-            'C:\\PTS\\zhongzi\\Rin\\FSV3004\\Rin_1.DAT',
-            'C:\\PTS\\zhongzi\\Rin\\FSV3004\\Rin_2.DAT',
-            'C:\\PTS\\zhongzi\\Rin\\FSV3004\\Rin_3.DAT',
-            'C:\\PTS\\zhongzi\\Rin\\FSV3004\\Rin_4.DAT',
-            'C:\\PTS\\zhongzi\\Rin\\FSV3004\\Rin_5.DAT',
-            'C:\\PTS\\zhongzi\\Rin\\FSV3004\\Rin_6.DAT',
-        ]
+        self.dc_value = CFG.rin.dc_internal  # 默认DC值
+        self.amplification = CFG.rin.amplification
+        self.file_paths = [str(CFG.dirs.rin_fsv3004 / seg[4]) for seg in CFG.rin.segments]
         self.dx = []
         self.dy = []
         self.ddx = []
@@ -263,7 +257,7 @@ class RinTest(BaseTestRunner):
         self.save_path = None
         self.ui_root = None
         self.stop_window = None
-        self.ip_address = "192.168.7.10"
+        self.ip_address = CFG.network.fsv3004_rin
 
     # ------------------------------------------------------------------
     # 模板方法覆写（匹配原 TestRunner.run_rin 错误处理与流程）
@@ -340,15 +334,8 @@ class RinTest(BaseTestRunner):
 
     def measure_loop(self):
         """6 段测量循环：每段调仪器读 trace → CSV 落盘"""
-        measurement_params = [
-            (10, 100, 5, 20, "Rin_1.DAT"),
-            (100, 1000, 5, 20, "Rin_2.DAT"),
-            (1000, 10000, 30, 20, "Rin_3.DAT"),
-            (10000, 100000, 30, 20, "Rin_4.DAT"),
-            (100000, 1000000, 30, 20, "Rin_5.DAT"),
-            (1000000, 10000000, 30, 20, "Rin_6.DAT"),
-        ]
-        dest_dir = r"C:\PTS\zhongzi\Rin\FSV3004"
+        measurement_params = CFG.rin.segments
+        dest_dir = str(CFG.dirs.rin_fsv3004)
         for start, stop, bw, avg, fname in measurement_params:
             if self.stop_flag.is_set():
                 self.log("[测试] RIN 测试已被终止")
@@ -428,7 +415,7 @@ class RinTest(BaseTestRunner):
         读取 CSV 数据，计算 RIN 值，合并数据并计算功率积分
         """
         # 检测文件夹是否为空
-        data_dir = r"C:\PTS\zhongzi\Rin\FSV3004"
+        data_dir = str(CFG.dirs.rin_fsv3004)
         if os.path.exists(data_dir):
             files = [f for f in os.listdir(data_dir) if os.path.isfile(os.path.join(data_dir, f))]
             if not files:
@@ -642,12 +629,12 @@ class RinTest(BaseTestRunner):
         except Exception as e:
             self.log(f"[保存] 生成自动保存路径失败: {e}")
 
-        target_xs = [1000, 10000, 100000, 1000000]
+        target_xs = list(CFG.rin.target_freqs)
 
         """驰誉振荡峰检测"""
         # 1. 修改检测范围为 1e5 到 3e6 Hz
-        relax_start = 1e5
-        relax_stop = 3e6
+        relax_start = CFG.rin.relax_start_hz
+        relax_stop = CFG.rin.relax_stop_hz
 
         freqs = np.array(self.ddx)
         ys = np.array(self.ddy)
@@ -727,11 +714,11 @@ class BackgroundNoiseTest(BaseTestRunner):
     def __init__(self, gui=None, log_func=None):
         super().__init__(gui=gui, log_func=log_func)
         self.instrument: Optional[FSV3004Instrument] = None
-        self.ip_address = "192.168.7.10"
-        self.start_freq = 10
-        self.stop_freq = 100_000_000
-        self.bandwidth = 30
-        self.avg_count = 1
+        self.ip_address = CFG.network.fsv3004_rin
+        self.start_freq = CFG.bg_noise.start_freq
+        self.stop_freq = CFG.bg_noise.stop_freq
+        self.bandwidth = CFG.bg_noise.bandwidth
+        self.avg_count = CFG.bg_noise.avg_count
         self.screenshot_name = "BackgroundNoise_Screen.png"
         self.dat_filename = "BackgroundNoise.DAT"
         self.is_seedlight = False
@@ -792,7 +779,7 @@ class BackgroundNoiseTest(BaseTestRunner):
         # 截图
         local_png = os.path.join(self.dest_dir, self.screenshot_name)
         self.instrument.capture_screenshot(
-            r"C:\PTS\Rin\_temp.png",
+            CFG.sys_paths.rin_temp_png,
             local_png,
         )
 
@@ -938,10 +925,10 @@ class RinGUI(BaseTestGUI):
 
         # 默认参数（保留原脚本默认路径/IP）
         self.params = {
-            "osa_ip": "192.168.7.20",
+            "osa_ip": CFG.network.rin_gui_display,
             #"osa_port": 5025,
-            "save_path": r"C:\PTS\zhongzi\Rin\FSV3004",
-            "dc_initial": 2.40
+            "save_path": str(CFG.dirs.rin_fsv3004),
+            "dc_initial": CFG.rin.dc_initial
         }
         self.entries: Dict[str, tk.Entry] = {}
         self.worker_thread: Optional[threading.Thread] = None

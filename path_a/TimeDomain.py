@@ -15,6 +15,7 @@ from core import (
     BaseTestGUI,
     visa_address,
 )
+from core.config import CFG
 
 import time
 import os
@@ -33,7 +34,7 @@ class TimeDomain(VisaInstrument):
     信号源（gen）作为辅助仪器自行管理。
     """
     def __init__(self, params, log_func):
-        super().__init__(log_func=log_func, timeout_ms=10000)
+        super().__init__(log_func=log_func, timeout_ms=CFG.timing.visa_default_ms)
         self.params = params
         self.scope = None  # self.inst 的业务别名
         self.gen = None
@@ -54,7 +55,7 @@ class TimeDomain(VisaInstrument):
     def calculate_optimal_scale_factor(self, vpp):
         """根据峰峰值计算最佳放大倍数"""
         # 异常值处理：如果峰峰值过大或过小，使用默认值
-        if vpp < 0.01 or vpp > 10:
+        if vpp < CFG.time_domain.vpp_min_valid or vpp > CFG.time_domain.vpp_max_valid:
             self.log(f"[警告] 峰峰值 {vpp:.4f} V 异常，使用默认放大倍数16倍")
             return 16
 
@@ -65,16 +66,7 @@ class TimeDomain(VisaInstrument):
 
         # 基于用户反馈优化的放大倍数选择逻辑
         # 不再局限于2的n次方，根据峰峰值动态调整
-        scale_factors = {
-            # 范围(mV): 推荐放大倍数
-            (0, 50): 64,     # 非常小的信号
-            (50, 100): 32,    # 小信号
-            (100, 200): 16,   # 中等小信号
-            (200, 400): 8,    # 中等信号
-            (400, 800): 4,    # 较大信号
-            (800, 1600): 2,   # 大信号
-            (1600, float('inf')): 1  # 非常大的信号
-        }
+        scale_factors = dict(CFG.time_domain.scale_map)
 
         # 查找对应的放大倍数
         for (min_mv, max_mv), factor in scale_factors.items():
@@ -85,20 +77,20 @@ class TimeDomain(VisaInstrument):
         # 默认返回16倍
         return 16
 
-    def read_stable_vpp(self, channel, num_measurements=5, delay=0.5):
+    def read_stable_vpp(self, channel, num_measurements=CFG.time_domain.vpp_stable_count, delay=CFG.time_domain.vpp_stable_delay_s):
         """读取稳定的峰峰值，去除异常值"""
         measurements = []
 
         for i in range(num_measurements):
             vpp = self.read_measurement(":MEAS:VPP?", channel)
             # 只保留合理范围内的测量值（0.01V到10V）
-            if 0.01 <= vpp <= 10:
+            if CFG.time_domain.vpp_min_valid <= vpp <= CFG.time_domain.vpp_max_valid:
                 measurements.append(vpp)
             time.sleep(delay)
 
         if not measurements:
             # 如果所有测量值都异常，返回默认值
-            return 0.1
+            return CFG.time_domain.vpp_default
 
         # 计算平均值
         return sum(measurements) / len(measurements)
@@ -128,13 +120,13 @@ class TimeDomain(VisaInstrument):
         initial_scale = 0.5  # 先设置为0.5V/div
         self.scope.write(f":{ch}:SCAL {initial_scale}")
         self.scope.write(":RUN")
-        time.sleep(3)  # 增加等待时间，确保信号稳定
+        time.sleep(CFG.time_domain.signal_stabilize_s)  # 增加等待时间，确保信号稳定
         self.scope.write(":MEAS:CLE")
         self.scope.write(f":MEAS:VAVG {ch}")
         self.scope.write(f":MEAS:VPP {ch}")
 
         # 测量稳定的峰峰值
-        stable_vpp = self.read_stable_vpp(ch, num_measurements=5, delay=0.5)
+        stable_vpp = self.read_stable_vpp(ch, num_measurements=CFG.time_domain.vpp_stable_count, delay=CFG.time_domain.vpp_stable_delay_s)
         self.log(f"[示波器] 稳定峰峰值测量: {stable_vpp:.4f} V (基于多次测量，去除异常值)")
 
         # 根据稳定的峰峰值计算最佳放大倍数
@@ -144,10 +136,10 @@ class TimeDomain(VisaInstrument):
         # 设置最终的垂直刻度
         final_scale = initial_scale / optimal_scale_factor
         self.scope.write(f":{ch}:SCAL {final_scale}")
-        time.sleep(3)  # 增加等待时间，确保信号稳定
+        time.sleep(CFG.time_domain.signal_stabilize_s)  # 增加等待时间，确保信号稳定
 
         # 最终测量，确认效果
-        final_vpp = self.read_stable_vpp(ch, num_measurements=3, delay=0.3)
+        final_vpp = self.read_stable_vpp(ch, num_measurements=CFG.time_domain.final_vpp_count, delay=CFG.time_domain.final_vpp_delay_s)
         self.log(f"[示波器] 最终峰峰值测量: {final_vpp:.4f} V")
         self.log(f"[示波器] 波形垂直刻度从 {initial_scale:.3f} V/div 调整到 {final_scale:.3f} V/div")
 
@@ -159,15 +151,15 @@ class TimeDomain(VisaInstrument):
         self.gen.write(f":SOUR{ch}:VOLT {self.params['GEN_VOLT']}")
         self.gen.write(f":SOUR{ch}:VOLT:OFFS {self.params['GEN_OFFSET']}")
         self.gen.write(f":OUTP{ch} ON")
-        time.sleep(1.5)
+        time.sleep(CFG.time_domain.gen_settle_s)
 
-    def read_measurement(self, cmd, channel=None, retries=5, delay=0.8):
+    def read_measurement(self, cmd, channel=None, retries=CFG.time_domain.meas_retries, delay=CFG.time_domain.meas_retry_delay_s):
         if channel is None:
             channel = self.params["SCOPE_CH"]
         for attempt in range(1, retries+1):
             try:
                 val_str = self.scope.query(f"{cmd} {channel}").strip()
-                if val_str and val_str not in ("9.91E+37", "NAN"):
+                if val_str and val_str not in CFG.time_domain.invalid_sentinels:
                     return float(val_str)
                 self.log(f"[警告] 第 {attempt} 次读取失败，返回：{val_str}")
                 time.sleep(delay)
@@ -226,14 +218,14 @@ class TimeDomainGUI(BaseTestGUI):
 
         # 内部参数仍使用英文键
         self.params = {
-            "SCOPE_IP": "192.168.7.12",
-            "GEN_IP": "192.168.7.13",
-            "OUTPUT_DIR": r"C:\PTS\zhongzi\TimeDomain",
-            "GEN_FREQ": 100,  # 内部使用，不显示在UI
-            "GEN_VOLT": 10,
-            "GEN_OFFSET": 5,
-            "GEN_CH": 2,
-            "SCOPE_CH": "CHAN1",
+            "SCOPE_IP": CFG.network.scope,
+            "GEN_IP": CFG.network.sig_gen_timedomain,
+            "OUTPUT_DIR": str(CFG.dirs.time_domain),
+            "GEN_FREQ": CFG.time_domain.test_frequencies[0],  # 内部使用，不显示在UI
+            "GEN_VOLT": CFG.time_domain.gen_volt,
+            "GEN_OFFSET": CFG.time_domain.gen_offset,
+            "GEN_CH": CFG.time_domain.gen_channel,
+            "SCOPE_CH": CFG.time_domain.scope_channel,
         }
 
         # 中文显示对应表
@@ -321,7 +313,7 @@ class TimeDomainGUI(BaseTestGUI):
             # 保存原始频率参数
             original_freq = self.params["GEN_FREQ"]
             # 测试频率列表
-            test_freqs = [100, 300]
+            test_freqs = list(CFG.time_domain.test_frequencies)
 
             for freq in test_freqs:
                 self.log(f"\n[测试] 开始 {freq}Hz 测试")
@@ -351,7 +343,7 @@ class TimeDomainGUI(BaseTestGUI):
         finally:
             td.close()
             # 一键测试模式：自动关闭窗口，触发进程退出
-            self.auto_close(2000)
+            self.auto_close(CFG.timing.auto_close_short_ms)
 
     def show_image_popup(self, img_path):
         win = tk.Toplevel(self.root)
@@ -435,9 +427,9 @@ def run_command_line():
 
     # 默认参数
     params = {
-        "SCOPE_IP": "192.168.1.10",
+        "SCOPE_IP": CFG.network.scope_cli,
         "SCOPE_CH": "CHAN1",
-        "GEN_IP": "192.168.1.20",
+        "GEN_IP": CFG.network.sig_gen_cli,
         "GEN_FREQ": 100,
         "GEN_VOLT": 10,
         "GEN_OFFSET": 5,

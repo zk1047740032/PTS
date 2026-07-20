@@ -35,6 +35,7 @@ from core import (
     clear_directory,
     write_xy_csv,
 )
+from core.config import CFG
 
 # ===============  DFB 种子激光器 RS-485 串口控制  ===============
 class DFBLaserController:
@@ -54,7 +55,7 @@ class DFBLaserController:
     CMD_SET_POWER_MODE = 0x5A   # 功率模式设置 (2B Power_Set + 1B 开关)
     CMD_SET_CURRENT_SW = 0xA8   # 电流开关 (1B 开关 + 1B 保存标志)
 
-    def __init__(self, port, addr=100, log_func=print):
+    def __init__(self, port, addr=CFG.serial.device_addr, log_func=print):
         self.port = port
         self.addr = addr
         self.log = log_func
@@ -64,10 +65,10 @@ class DFBLaserController:
         self._wave_t_index = None   # Wave_T_index（2B，符号未定）
         self._wave_t_offset = None  # Wave_T_offset（4B，符号未定）
 
-    def open(self, timeout_s=1.5):
+    def open(self, timeout_s=CFG.serial.timeout_s):
         self.serial = serial.Serial(
             port=self.port,
-            baudrate=115200,
+            baudrate=CFG.serial.baudrate,
             timeout=timeout_s,
             bytesize=serial.EIGHTBITS,
             parity=serial.PARITY_NONE,
@@ -87,10 +88,10 @@ class DFBLaserController:
 
     def _send_frame(self, cmd_byte: int, payload: bytes = b'', timeout: float | None = None) -> bytes | None:
         """timeout=None 使用串口默认超时；传入 float 则临时覆盖（在锁内切换，线程安全）"""
-        frame = bytes([0x50, 0x00, self.addr, cmd_byte, len(payload)])
+        frame = bytes([CFG.serial.frame_head1, CFG.serial.frame_head2, self.addr, cmd_byte, len(payload)])
         frame += payload
         s, x = self._checksum(frame[1:])
-        frame += bytes([s, x, 0x0D, 0x0A])
+        frame += bytes([s, x, CFG.serial.frame_tail1, CFG.serial.frame_tail2])
 
         with self._lock:
             if timeout is not None:
@@ -101,7 +102,7 @@ class DFBLaserController:
                 self.serial.write(frame)
 
                 header = self.serial.read(5)
-                if len(header) < 5 or header[0] != 0x50:
+                if len(header) < 5 or header[0] != CFG.serial.frame_head1:
                     return None
 
                 data_len = header[4]
@@ -426,7 +427,7 @@ class SingleFrequency(VisaInstrument):
 
             # 4. 阻塞等待完成
             current_timeout = self.sa.timeout
-            self.sa.timeout = 15000  # 临时设置为 15 秒 (单位毫秒)
+            self.sa.timeout = CFG.single_freq.sweep_timeout_ms  # 临时设置 (单位毫秒)
 
             # 发送查询，程序会在这里"卡住"，直到仪器扫完
             self.query('*OPC?')
@@ -636,55 +637,55 @@ class SingleFrequencyGUI(BaseTestGUI):
 
         self.params_1um = {
             # 仪器 & 输出
-            'IP地址': '192.168.7.15',
-            '输出目录': r'C:\PTS\zhongzi\SingleFrequency\1.0μm',
+            'IP地址': CFG.network.single_freq_sa,
+            '输出目录': str(CFG.dirs.single_freq_1um),
 
             # 串口
-            'DFB串口': 'COM1',
+            'DFB串口': CFG.serial.port_default,
 
             # 测试时长
-            '测试时长(分钟)': 30.0,
+            '测试时长(分钟)': CFG.single_freq.test_duration_min,
 
             # 温度参数
-            '温度上限(°C)': 60.0,
-            '温度下限(°C)': 18.0,
-            '温度步长(°C)': 0.1,
-            '温度变化频率(s)': 3.0,
+            '温度上限(°C)': CFG.single_freq.temp_max_1um,
+            '温度下限(°C)': CFG.single_freq.temp_min_1um,
+            '温度步长(°C)': CFG.single_freq.temp_step_1um,
+            '温度变化频率(s)': CFG.single_freq.temp_interval_1um,
 
             # 电流参数
-            '电流上限(mA)': 600.0,
-            '电流下限(mA)': 100.0,
-            '电流步长(mA)': 5.0,
-            '电流变化频率(s)': 5.0,
+            '电流上限(mA)': CFG.single_freq.cur_max_1um,
+            '电流下限(mA)': CFG.single_freq.cur_min_1um,
+            '电流步长(mA)': CFG.single_freq.cur_step_1um,
+            '电流变化频率(s)': CFG.single_freq.cur_interval_1um,
 
             # 扫描参数
-            '邻域点数': 10,
-            '峰值阈值(dB)': 3.0,
-            '邻域显著性(dB)': 5.0,
+            '邻域点数': CFG.single_freq.peak_guard_points,
+            '峰值阈值(dB)': CFG.single_freq.peak_threshold_db,
+            '邻域显著性(dB)': CFG.single_freq.peak_prominence_db,
         }
 
         self.params_1_5um = {
             # 仪器 & 输出
-            'IP地址': '192.168.7.15',
-            '输出目录': r'C:\PTS\zhongzi\SingleFrequency\1.5μm',
+            'IP地址': CFG.network.single_freq_sa,
+            '输出目录': str(CFG.dirs.single_freq_1_5um),
 
             # 串口
-            'DFB串口': 'COM1',
+            'DFB串口': CFG.serial.port_default,
 
             # 测试时长
             '测试时长(分钟)': 30.0,
 
             # 温度参数
-            '温度上限(°C)': 56.0,
-            '温度下限(°C)': 20.0,
+            '温度上限(°C)': CFG.single_freq.temp_max_1_5um,
+            '温度下限(°C)': CFG.single_freq.temp_min_1_5um,
             '温度步长(°C)': 0.1,
             '温度变化频率(s)': 3.0,
 
             # 电流参数
-            '电流上限(mA)': 1400.0,
-            '电流下限(mA)': 1400.0,
-            '电流步长(mA)': 0.0,
-            '电流变化频率(s)': 0.0,
+            '电流上限(mA)': CFG.single_freq.cur_max_1_5um,
+            '电流下限(mA)': CFG.single_freq.cur_min_1_5um,
+            '电流步长(mA)': CFG.single_freq.cur_step_1_5um,
+            '电流变化频率(s)': CFG.single_freq.cur_interval_1_5um,
 
             # 扫描参数
             '邻域点数': 10,
@@ -975,10 +976,10 @@ class SingleFrequencyGUI(BaseTestGUI):
         """
         same = 0
         last_val = None
-        tol = 0.001
-        consec_ok = 3
-        max_wait = 300.0
-        interval = 0.2
+        tol = CFG.single_freq.stability_tol_nm
+        consec_ok = CFG.single_freq.stability_consecutive
+        max_wait = CFG.single_freq.stability_max_wait_s
+        interval = CFG.single_freq.stability_interval_s
 
         t0 = time.time()
         while time.time() - t0 < max_wait:
@@ -1029,7 +1030,7 @@ class SingleFrequencyGUI(BaseTestGUI):
         self.log(f"[测试] 预计结束时间: {time.strftime('%H:%M:%S', time.localtime(end_time))}")
         self.log(f"[测试] 测试时长: {test_duration_min:.1f} 分钟")
 
-        sa = SingleFrequency(ip=str(p['IP地址']), timeout_s=60.0, log=self.log)
+        sa = SingleFrequency(ip=str(p['IP地址']), timeout_s=CFG.single_freq.sa_timeout_s, log=self.log)
 
         # DFB 激光器初始化（串口 RS-485，温度通过 0xA5 命令控制光栅温度）
         lc = DFBLaserController(port=str(p['DFB串口']), log_func=self.log)
@@ -1039,7 +1040,7 @@ class SingleFrequencyGUI(BaseTestGUI):
             lc.open()
             self.lc = lc
             sa.connect()
-            sa.set_avg(on=True, count=2)
+            sa.set_avg(on=True, count=CFG.single_freq.avg_count)
 
             # 启动异步实时参数刷新：后台线程做串口 IO，GUI 线程只消费队列
             self._realtime_stop.clear()
@@ -1081,21 +1082,21 @@ class SingleFrequencyGUI(BaseTestGUI):
             sa.write(":TRACe:CLEar TRACE1")
             sa.set_trace_mode(max_hold=False)
             sa.write(":INITiate:CONTinuous OFF")
-            sa.set_avg(on=True, count=2)
+            sa.set_avg(on=True, count=CFG.single_freq.avg_count)
             sa.set_detector("RMS", trace=1)
             sa.write(":BANDwidth:VIDeo:RATIO 1")
             sa.set_sweep_type('SPD')
-            sa.set_sweep_time(1)
+            sa.set_sweep_time(CFG.single_freq.sweep_time_s)
 
-            span = 500.0 * 1e6
-            step = 500.0 * 1e6
+            span = CFG.single_freq.sweep_span_mhz * 1e6
+            step = CFG.single_freq.sweep_step_mhz * 1e6
             f_start = 0.0 * 1e6
-            f_stop = 18000.0 * 1e6
+            f_stop = CFG.single_freq.sweep_freq_max_mhz * 1e6
             center = f_start + span / 2.0
 
             # 先设置频宽为500MHz，再设置RBW为30kHz
             sa.set_freq_span(center=center, span=span)
-            sa.set_bw(rbw_hz=30.0 * 1e3)
+            sa.set_bw(rbw_hz=CFG.single_freq.rbw_khz * 1e3)
 
             # ---- 线程 1：温度控制（DFB 0xA5 光栅温度命令） ----
             def temperature_control_thread():
@@ -1229,11 +1230,11 @@ class SingleFrequencyGUI(BaseTestGUI):
 
                 # 每次新跨度开始前彻底清屏 + 重新开平均
                 sa.write(":TRACe:CLEar TRACE1")
-                sa.write(":AVERage:COUNt 2")
+                sa.write(f":AVERage:COUNt {CFG.single_freq.avg_count}")
                 sa.write(":AVERage:STATe ON")
 
-                for repeat in range(2):
-                    sa.set_sweep_time(1)
+                for repeat in range(CFG.single_freq.fine_repeat_count):
+                    sa.set_sweep_time(CFG.single_freq.sweep_time_s)
                     sa.sweep_once(f'细扫@{center/1e9:.3f}GHz')
                     self.log(f"细扫@{center/1e9:.3f}GHz")
                     x, y = sa.get_trace_xy()
@@ -1252,7 +1253,7 @@ class SingleFrequencyGUI(BaseTestGUI):
                         # 保存数据，包含温度和电流信息
                         tag = f"T{temp_str}C_I{cur_str}mA"
                         tag2 = f"fine_{tag}_{int(center/1e6)}MHz"
-                        rbw_used = sa.last_rbw_hz if getattr(sa, 'last_rbw_hz', None) else 30.0 * 1e3
+                        rbw_used = sa.last_rbw_hz if getattr(sa, 'last_rbw_hz', None) else CFG.single_freq.rbw_khz * 1e3
                         csvp, pngp, peakcsv = fine_peak.save_csv_png(x, y, peaks, out_dir, tag2, rbw_hz=rbw_used)
                         self.log(f"[细扫] 命中异常峰，保存：{tag2}.csv/.png/_peaks.csv")
 
@@ -1337,7 +1338,7 @@ class SingleFrequencyGUI(BaseTestGUI):
                     self.realtime_labels[key].config(text="--")
 
             # 一键测试模式：自动关闭窗口，触发进程退出
-            self.auto_close(3000)
+            self.auto_close(CFG.timing.auto_close_long_ms)
 
     def _on_test_type_change(self, event=None):
         if self.test_type_var.get() == "1μm":
@@ -1365,10 +1366,10 @@ class SingleFrequencyGUI(BaseTestGUI):
             import serial.tools.list_ports
             ports = [p.device for p in serial.tools.list_ports.comports()]
             if not ports:
-                ports = ['COM1']
+                ports = list(CFG.serial.fallback_ports)
             return ports
         except Exception:
-            return ['COM1', 'COM2', 'COM3', 'COM4']
+            return list(CFG.serial.fallback_ports)
 
     def _refresh_serial_ports(self):
         """刷新串口下拉框的可用端口列表"""

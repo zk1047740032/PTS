@@ -23,6 +23,7 @@ from utils.theme import (
     FONT_SIZE_BODY, FONT_SIZE_SMALL, FONT_SIZE_CAPTION,
     PADDING_SECTION, PADDING_CARD, PADDING_ROW,
 )
+from core.config import CFG
 # ==========================================
 # 动态导入辅助函数
 # ==========================================
@@ -201,8 +202,8 @@ MODULE_GROUPS = {
 # ==========================================
 # 光开关配置
 # ==========================================
-OPTICAL_SWITCH_VISA = "USB0::0x0005::0x0012::87104000113::INSTR"
-CHANNEL_SWITCH_DELAY = 1.5  # 切换通道后稳定延时（秒）
+OPTICAL_SWITCH_VISA = CFG.usb.optical_switch
+CHANNEL_SWITCH_DELAY = CFG.timing.channel_switch_delay_s
 
 class IntegratedPlatform:
     """
@@ -1127,7 +1128,7 @@ class IntegratedPlatform:
         else:
             base_path = os.getcwd()
         template_path = os.path.join(base_path, "report", "templates", "template_default.docx")
-        save_dir = r"C:\PTS\report"
+        save_dir = str(CFG.dirs.report)
         os.makedirs(save_dir, exist_ok=True)
         output_path = os.path.join(save_dir, f"测试报告_{time.strftime('%Y%m%d_%H%M%S')}.docx")
 

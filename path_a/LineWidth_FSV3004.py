@@ -30,6 +30,7 @@ from core import (
     write_xy_csv,
     read_instrument_screenshot,
 )
+from core.config import CFG
 
 
 # ============ 信号发生器控制类 ============
@@ -48,9 +49,9 @@ class SignalGenerator(VisaInstrument):
         参数:
             log_callback (callable, optional): 日志回调函数，用于输出日志信息
         """
-        super().__init__(log_func=log_callback, timeout_ms=10000)
+        super().__init__(log_func=log_callback, timeout_ms=CFG.timing.visa_default_ms)
 
-    def connect(self, ip_address, max_retries=3, retry_interval=2):
+    def connect(self, ip_address, max_retries=CFG.linewidth.connect_max_retries, retry_interval=CFG.linewidth.connect_retry_interval_s):
         """
         连接信号发生器（添加重试机制）
 
@@ -166,7 +167,7 @@ class LinewidthTester(VisaInstrument):
         参数:
             log_callback (callable, optional): 日志回调函数，用于输出日志信息
         """
-        super().__init__(log_func=log_callback, timeout_ms=60000)
+        super().__init__(log_func=log_callback, timeout_ms=CFG.timing.visa_medium_ms)
 
     def connect(self, ip_address):
         """
@@ -248,7 +249,7 @@ class LinewidthTester(VisaInstrument):
         """
         saved_timeout = self.inst.timeout
         try:
-            self.inst.timeout = 5000
+            self.inst.timeout = CFG.timing.visa_short_ms
             result = self.inst.query("CALC:MARK:FUNC:NDBD:RES?").strip()
             ndbdown_value = float(result)
             self.log(f"[频谱仪] NdBdown值: {ndbdown_value/1000:.2f}kHz")
@@ -293,7 +294,7 @@ class LinewidthTester(VisaInstrument):
         if self.stop_flag.is_set():
             return False
 
-        max_retries = 2
+        max_retries = CFG.linewidth.save_data_max_retries
         for attempt in range(max_retries):
             try:
                 image_filename = os.path.basename(instr_image_path)
@@ -309,7 +310,7 @@ class LinewidthTester(VisaInstrument):
                 # 1. 截图：存仪器本地 → MMEM:DATA? 读回 → 删临时文件
                 read_instrument_screenshot(
                     self.inst,
-                    r"C:\PTS\zhongzi\LineWidth\_temp.png",
+                    CFG.sys_paths.instrument_temp_png,
                     pc_image_path,
                     log_func=self.log,
                 )
@@ -343,7 +344,7 @@ class LinewidthTester(VisaInstrument):
                         self.inst.close()
                     except Exception:
                         pass
-                    time.sleep(2)
+                    time.sleep(CFG.linewidth.reconnect_delay_s)
                     self.connect(self._ip_address)
                 else:
                     raise
@@ -438,18 +439,18 @@ class LineWidth_FSV3004_GUI(BaseTestGUI):
         # 初始化参数
         self.params = {
             # 仪器参数（只保存数值，不保存单位）
-            'Ref Level(mV)': '1000',
-            'M1位置(MHz)': '80',
-            '中心频率(MHz)': '80',
-            'RBW(Hz)': '100',
-            'N dB down': '20',
+            'Ref Level(mV)': str(CFG.linewidth.ref_level_mv),
+            'M1位置(MHz)': str(CFG.linewidth.m1_position_mhz),
+            '中心频率(MHz)': str(CFG.linewidth.center_freq_mhz),
+            'RBW(Hz)': str(CFG.linewidth.rbw_hz),
+            'N dB down': str(CFG.linewidth.n_db_down),
 
             # 连接与地址
-            '频谱仪IP': '192.168.7.10',
-            '信号发生器IP': '192.168.7.11',
-            '仪器本地图片路径': r"C:\PTS\zhongzi\LineWidth\image.png",
-            '仪器本地数据路径': r"C:\PTS\zhongzi\LineWidth\data.csv",
-            '输出目录': r"C:\PTS\zhongzi\LineWidth"
+            '频谱仪IP': CFG.network.fsv3004_linewidth,
+            '信号发生器IP': CFG.network.sig_gen_linewidth,
+            '仪器本地图片路径': str(CFG.dirs.line_width / "image.png"),
+            '仪器本地数据路径': str(CFG.dirs.line_width / "data.csv"),
+            '输出目录': str(CFG.dirs.line_width)
         }
 
         self.tester = None
@@ -623,7 +624,7 @@ class LineWidth_FSV3004_GUI(BaseTestGUI):
                 self.tester.connect(self.params['频谱仪IP'])
 
                 # 定义要测试的四个Span值
-                span_values = ['100', '200', '500', '1000', '2000']
+                span_values = list(CFG.linewidth.span_values)
 
                 # 准备 ndbdown.csv 文件路径
                 ndbdown_csv_path = os.path.join(self.params['输出目录'], 'ndbdown.csv')
@@ -707,19 +708,19 @@ class LineWidth_FSV3004_GUI(BaseTestGUI):
                     # 只有在成功连接信号发生器时才执行额外测试
                     if connected:
                         # 配置信号发生器：正弦波、频率0.1Hz、幅值0vpp、偏移1vdc
-                        signal_gen.configure(waveform="SIN", freq=0.1, volt=0, offset=1)
+                        signal_gen.configure(waveform="SIN", freq=CFG.linewidth.extra_freq, volt=CFG.linewidth.extra_volt, offset=CFG.linewidth.extra_offset)
 
                         # 打开信号发生器输出
                         signal_gen.set_output(on=True)
 
                         # 等待信号稳定
-                        time.sleep(1)
+                        time.sleep(CFG.linewidth.signal_stabilize_s)
 
                         # ============ 额外线宽测试（Span=200kHz） ============
                         self.log("\n[额外测试] 开始Span=200kHz的线宽测试")
 
                         # 配置频谱仪Span=500kHz
-                        span = '500'
+                        span = CFG.linewidth.extra_span
                         self.log(f"[额外测试] 开始测试Span: {span}")
 
                         # 配置参数，使用500kHz Span
@@ -743,7 +744,7 @@ class LineWidth_FSV3004_GUI(BaseTestGUI):
 
                             # 为额外测试生成唯一文件名
                             base_name = os.path.splitext(os.path.basename(self.params['仪器本地图片路径']))[0]
-                            span_suffix = '500+1v'  # 200kHz = 200K
+                            span_suffix = CFG.linewidth.extra_suffix  # 200kHz = 200K
 
                             # 构建文件路径
                             instr_image_path = os.path.join(
@@ -807,7 +808,7 @@ class LineWidth_FSV3004_GUI(BaseTestGUI):
                 self.root.after(0, lambda: self.start_btn.config(state=tk.NORMAL))
                 self.root.after(0, lambda: self.stop_btn.config(state=tk.DISABLED))
                 # 一键测试模式：自动关闭窗口，触发进程退出
-                self.auto_close(3000)
+                self.auto_close(CFG.timing.auto_close_long_ms)
 
         self.worker = threading.Thread(target=task, daemon=True)
         self.worker.start()

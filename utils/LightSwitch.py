@@ -13,6 +13,7 @@ import sys, pathlib
 # 确保能 import core（脚本独立运行时不以包形式组织）
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 from core import VisaInstrument
+from core.config import CFG
 from typing import Optional, Callable
 
 
@@ -27,7 +28,7 @@ class OpticalSwitch(VisaInstrument):
     关闭基类 *IDN? 验证后，由本方法自行 get_channel() 验证，保持零行为变更。
 
     使用示例:
-        sw = OpticalSwitch("USB0::0x0005::0x0012::87104000113::INSTR")
+        sw = OpticalSwitch(CFG.usb.optical_switch)  # USB0::0x0005::0x0012::87104000113::INSTR
         if sw.connect():
             ch = sw.get_channel()
             sw.set_channel(2)
@@ -44,7 +45,7 @@ class OpticalSwitch(VisaInstrument):
             visa_resource: VISA 资源字符串，如 "USB0::0x0005::0x0012::87104000113::INSTR"
             log_func: 日志回调函数
         """
-        super().__init__(log_func=log_func, address=visa_resource, timeout_ms=5000)
+        super().__init__(log_func=log_func, address=visa_resource, timeout_ms=CFG.timing.visa_short_ms)
         self.visa_resource = visa_resource  # 业务字段，对应基类 self.address
 
     def connect(self, visa_resource: Optional[str] = None) -> bool:

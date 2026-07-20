@@ -20,6 +20,7 @@ from core import (
     VisaInstrument,
     BaseTestGUI,
 )
+from core.config import CFG
 
 # ===============  上位机控制（pywinauto）  ===============
 try:
@@ -38,7 +39,7 @@ class PowerMeterController(VisaInstrument):
     不调用 super().connect()，以保证功率计通信行为与原版一致（零行为变更）。
     self.resource 为业务字段，对应基类 self.address。
     """
-    def __init__(self, resource: str, log_func=print, timeout_ms: int = 5000):
+    def __init__(self, resource: str, log_func=print, timeout_ms: int = CFG.timing.visa_short_ms):
         """
         Initialize a PowerMeterController.
 
@@ -85,7 +86,7 @@ class PowerMeterController(VisaInstrument):
     def read_power(self) -> float:
         if self.inst is None:
             raise RuntimeError("功率计未连接")
-        candidates = ["READ?", "MEAS:POW?", "POW:READ?", "READ:POWER?", "READ:POW?"]
+        candidates = list(CFG.power.candidate_commands)
         last_errs = []
         for cmd in candidates:
             val = self._try_query_float(cmd)
@@ -129,7 +130,7 @@ class PowerCollector:
             if os.path.isdir(save_path) or save_path.endswith(os.sep):
                 out_dir = save_path
             else:
-                out_dir = os.path.dirname(save_path) or "."
+                out_dir = os.path.dirname(save_path) or CFG.power.fallback_save_dir
 
             os.makedirs(out_dir, exist_ok=True)
 
@@ -158,9 +159,9 @@ class PowerGUI(BaseTestGUI):
 
         self.params = {
             "usb_resource": "",
-            "save_path": r"C:\PTS\zhongzi\Power",
-            "burnin_data": r"C:\PTS\zhongzi\Power\burnin_data.csv",
-            "burnin_output": r"C:\PTS\zhongzi\Power"
+            "save_path": str(CFG.dirs.power),
+            "burnin_data": str(CFG.dirs.power / "burnin_data.csv"),
+            "burnin_output": str(CFG.dirs.power)
         }
 
         self.param_labels = {
@@ -314,7 +315,7 @@ class PowerGUI(BaseTestGUI):
             usb_res = p["usb_resource"]
             if not usb_res:
                 self.log("未填写 USB 资源地址")
-                self.auto_close(2000)
+                self.auto_close(CFG.timing.auto_close_short_ms)
                 return
             try:
                 self.pm = PowerMeterController(resource=usb_res, log_func=self.log)
@@ -338,7 +339,7 @@ class PowerGUI(BaseTestGUI):
                 self.log(f"采集失败: {e}")
             finally:
                 # 一键测试模式：自动关闭窗口，触发进程退出
-                self.auto_close(2000)
+                self.auto_close(CFG.timing.auto_close_short_ms)
 
         thread = threading.Thread(target=target, daemon=True)
         thread.start()
@@ -359,7 +360,7 @@ class PowerGUI(BaseTestGUI):
             output_dir = burnin_output
         else:
             # 如果没有指定输出路径，使用输入文件的目录
-            output_dir = os.path.dirname(burnin_data) or "."
+            output_dir = os.path.dirname(burnin_data) or CFG.power.fallback_save_dir
 
         self.log(f"[烤机计算] 输入文件: {burnin_data}")
         self.log(f"[烤机计算] 输出目录: {output_dir}")
@@ -371,7 +372,7 @@ class PowerGUI(BaseTestGUI):
                 reader = csv.reader(f)
 
                 # 跳过前14行，第15行是表头
-                for _ in range(14):
+                for _ in range(CFG.power.burnin_header_lines):
                     next(reader, None)
 
                 headers = next(reader, None)  # 读取第15行的表头
@@ -380,7 +381,7 @@ class PowerGUI(BaseTestGUI):
                 power_col_index = None
                 if headers:
                     for i, header in enumerate(headers):
-                        if header.strip() == 'Power (W)':
+                        if header.strip() == CFG.power.burnin_power_column:
                             power_col_index = i
                             break
 
