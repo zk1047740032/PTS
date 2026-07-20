@@ -61,6 +61,24 @@ def _get_hot_waverange():
     if wavelength < 1200: return 0.7
     else: return 1
 
+def _check_single_freq_result():
+    """
+    检查单频测试输出目录是否有文件。
+    测试开始时清空输出目录，只有扫出单频（检测到峰值）才会写入 CSV/PNG。
+    因此输出目录为空 → "无"，非空 → "有"。
+    """
+    from core.config import CFG
+    dirs = [str(CFG.dirs.single_freq_1um), str(CFG.dirs.single_freq_1_5um)]
+    for d in dirs:
+        if os.path.isdir(d):
+            try:
+                if any(os.path.isfile(os.path.join(d, f)) for f in os.listdir(d)):
+                    return "有"
+            except OSError:
+                pass
+    return "无"
+
+
 def assemble_report_data():
     """
     组装报告模板所需的全部数据。
@@ -135,6 +153,9 @@ def assemble_report_data():
             r"C:\PTS\zhongzi\LineWidth\ndbdown.csv",
             row_idx=4, col_idx=0, cast=float, fallback="(未读取到Ndbdown数据)",
         ),
+
+        # ---- 单频 ----
+        "text_single_freq": _check_single_freq_result(),
 
         # ---- Fig.5 偏振测试 ----
         "img_polarization": "暂无",

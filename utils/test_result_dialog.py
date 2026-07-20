@@ -37,7 +37,7 @@ _FIELDS_MEASURED = [
     ("相对强度噪声(RIN)",                "text_rin",               False, "dBc/Hz"),
     ("激光线宽(100us积分)",               "text_linewidth",         False, "kHz"),
     ("光谱信噪比",         "text_SNR",               False, "dB"),
-    ("单频",               None,                     False, ""),
+    ("单频",               "text_single_freq",      False, ""),
     ("时域",               None,                     False, ""),
 ]
 
@@ -304,10 +304,10 @@ class TestResultDialog:
 
         close_btn = tk.Button(
             bottom_frame, text="关闭",
-            font=("微软雅黑", 10),
-            bg=COLOR_BG, fg="#5A6577",
-            activebackground="#EEF1F5", activeforeground="#1A202C",
-            relief="flat", bd=0, padx=20, pady=6,
+            font=("微软雅黑", 10, "bold"),
+            bg=COLOR_CARD_BG, fg=COLOR_ACCENT,
+            activebackground=COLOR_BG, activeforeground=COLOR_ACCENT_HOVER,
+            relief="solid", bd=1, padx=20, pady=6,
             command=self.dialog.destroy,
             cursor="hand2"
         )
