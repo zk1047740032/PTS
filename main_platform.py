@@ -32,7 +32,7 @@ from core.config import CFG
 
 
 # ---- 基准尺寸（以 96 DPI / 100% 系统缩放为基准设计） ----
-_BASE_WINDOW_W      = 777   # 主窗口宽度
+_BASE_WINDOW_W      = 666   # 主窗口宽度
 _BASE_WINDOW_H      = 450    # 主窗口高度
 _BASE_LEFT_PANEL_W  = 275    # 左侧控制面板宽度
 _BASE_RESULT_W      = 370    # 测试结果弹窗宽度
