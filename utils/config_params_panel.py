@@ -29,7 +29,13 @@ from utils.theme import (
 )
 
 # ---- 用户配置 JSON 路径 ----
-_PROJECT_ROOT = Path(__file__).resolve().parent.parent
+# PyInstaller 打包后 __file__ 指向临时解压目录（退出即删除），
+# 必须用 sys.executable 获取 exe 所在目录才能持久化配置。
+import sys as _sys
+if getattr(_sys, 'frozen', False):
+    _PROJECT_ROOT = Path(_sys.executable).parent
+else:
+    _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 _USER_CONFIG_PATH = _PROJECT_ROOT / "config" / "user_config.json"
 
 # ---- 窗口基准尺寸 ----

@@ -9,7 +9,28 @@ a = Analysis(['main_platform.py'],
     ('PreciLasers.ico', '.'),
     ('report/templates/template_default.docx', 'report/templates'),
 ],
-             hiddenimports=['pyvisa', 'matplotlib.backends.backend_tkagg', 'PIL._tkinter_finder', 'docxtpl', 'docx', 'jinja2', 'lxml'],
+             hiddenimports=[
+        # 仪器/UI 底层依赖
+        'pyvisa', 'serial', 'pywinauto',
+        # matplotlib / PIL 与 tkinter 集成
+        'matplotlib.backends.backend_tkagg', 'PIL._tkinter_finder',
+        # docx 报告生成
+        'docxtpl', 'docx', 'jinja2', 'lxml',
+        # multiprocessing (Windows + console=False 场景)
+        'multiprocessing',
+        # === 通过 importlib.import_module 动态加载的测试模块 ===
+        'path_a.Rin_FSV3004',
+        'path_a.LineWidth_FSV3004',
+        'path_a.TimeDomain',
+        'path_a.SpectrumSNR',
+        'path_a.SingleFrequency',
+        'path_a.Power',
+        'path_a.PhaseNoise',
+        'path_b.WaveLength',
+        # path_b.WaveLength 的传递依赖
+        'path_b.drivers.wlmData',
+        'path_b.drivers.wlmConst',
+    ],
              hookspath=[],
              runtime_hooks=[],
              excludes=[],
