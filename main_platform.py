@@ -1,5 +1,6 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
+import importlib
 import json
 import os
 import sys
@@ -40,6 +41,20 @@ _BASE_HELP_H        = 480    # 说明文档窗口高度
 _BASE_SEED_W        = 390    # 种子参数窗口宽度
 _BASE_SEED_H        = 328    # 种子参数窗口高度
 
+# ==========================================
+# 模块注册表 —— 新部门只需改这里 + MODULE_MAP + MODULE_GROUPS
+# ==========================================
+MODULE_REGISTRY = {
+    "Rin_FSV3004":    ("path_a.Rin_FSV3004",    "RinGUI"),
+    "线宽_FSV3004":   ("path_a.LineWidth_FSV3004", "LineWidth_FSV3004_GUI"),
+    "时域":           ("path_a.TimeDomain",      "TimeDomainGUI"),
+    "信噪比":         ("path_a.SpectrumSNR",     "SpectrumSNRGUI"),
+    "单频":           ("path_a.SingleFrequency", "SingleFrequencyGUI"),
+    "功率":           ("path_a.Power",           "PowerGUI"),
+    "PZT调制":        ("path_b.WaveLength",      "WaveLengthTestGUI"),
+    "相噪":           ("path_a.PhaseNoise",      "PhaseNoiseGUI"),
+}
+
 # 【修改点 1】：函数签名增加 cmd_queue (命令队列)
 def run_module_process(module_name, start_method, msg_queue, cmd_queue):
     """
@@ -72,27 +87,12 @@ def run_module_process(module_name, start_method, msg_queue, cmd_queue):
     """
     try:
         gui_class = None
-        # 导入逻辑保持不变
-        if module_name == "Rin_FSV3004":
-            from path_a.Rin_FSV3004 import RinGUI as gui_class
-        elif module_name == "线宽_FSV3004":
-            from path_a.LineWidth_FSV3004 import LineWidth_FSV3004_GUI as gui_class
-
-        elif module_name == "时域":
-            from path_a.TimeDomain import TimeDomainGUI as gui_class
-        elif module_name == "信噪比":
-            from path_a.SpectrumSNR import SpectrumSNRGUI as gui_class
-        elif module_name == "单频":
-            from path_a.SingleFrequency import SingleFrequencyGUI as gui_class
-        elif module_name == "功率":
-            from path_a.Power import PowerGUI as gui_class
-        elif module_name == "PZT调制":
-            from path_b.WaveLength import WaveLengthTestGUI as gui_class
-        elif module_name == "相噪":
-            from path_a.PhaseNoise import PhaseNoiseGUI as gui_class
-
-        if not gui_class:
+        # 通过注册表动态导入，新部门只需改 MODULE_REGISTRY
+        if module_name not in MODULE_REGISTRY:
             raise ValueError(f"未知模块: {module_name}")
+        module_path, class_name = MODULE_REGISTRY[module_name]
+        mod = importlib.import_module(module_path)
+        gui_class = getattr(mod, class_name)
 
         msg_queue.put((module_name, "running", f"正在启动 {module_name} 窗口..."))
 
@@ -230,13 +230,15 @@ class IntegratedPlatform:
 
         self.setup_ui()
 
-        # 初始化光开关
+        # 默认显示光路A → 通道3
+        self.nb.select(0)            # 光路A（第一个一级标签页）
+        self.sub_nb.select(2)        # 通道3（第三个二级标签页，索引从0开始）
+
+        # 初始化光开关（不自动连接，等一键测试时再连接）
         self.optical_switch = OpticalSwitch(
             OPTICAL_SWITCH_VISA,
             log_func=lambda msg: self.log("光开关", msg)
         )
-        if not self.optical_switch.connect():
-            self.log("光开关", "光开关连接失败，一键测试时通道切换将不可用", "error")
 
         self.root.after(100, self.process_queue_messages)
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
@@ -395,12 +397,12 @@ class IntegratedPlatform:
 
             if group_name == "光路A":
                 # 嵌套子标签页
-                sub_nb = ttk.Notebook(tab_frame, style="Sub.TNotebook")
-                sub_nb.pack(fill=tk.BOTH, expand=True, padx=2, pady=2)
+                self.sub_nb = ttk.Notebook(tab_frame, style="Sub.TNotebook")
+                self.sub_nb.pack(fill=tk.BOTH, expand=True, padx=2, pady=2)
 
                 for channel_name, channel_modules in module_list.items():
-                    ch_frame = tk.Frame(sub_nb, bg=COLOR_CARD_BG)
-                    sub_nb.add(ch_frame, text=f"  {channel_name}  ")
+                    ch_frame = tk.Frame(self.sub_nb, bg=COLOR_CARD_BG)
+                    self.sub_nb.add(ch_frame, text=f"  {channel_name}  ")
                     self._build_checkbox_list(ch_frame, channel_modules)
             else:
                 self._build_checkbox_list(tab_frame, module_list)
@@ -866,6 +868,15 @@ class IntegratedPlatform:
             time.sleep(0.1)
 
         # 光路A（ch3/ch2/ch1/ch4）：后台线程按通道顺序编排
+        has_optical_channels = any(
+            channel_groups.get(k) for k in ["ch1", "ch2", "ch3", "ch4"]
+        )
+        if has_optical_channels:
+            if not self.optical_switch.connect():
+                self.log("光开关", "光开关连接失败，通道切换将不可用", "error")
+            else:
+                self.log("光开关", "光开关连接成功")
+
         # 传递完整 channel_groups（含 path_b），编排线程在所有测试完成后弹出结果窗口
         threading.Thread(
             target=self._orchestrate_channel_tests,
