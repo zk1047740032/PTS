@@ -68,7 +68,8 @@ PARAM_SCHEMA: OrderedDict[str, OrderedDict[str, list[tuple[str, str]]]] = Ordere
             ("network.osa",                "光谱仪 (信噪比)"),
         ]),
         ("USB 设备", [
-            ("usb.optical_switch", "光开关 VISA 地址"),
+            ("usb.power_meter",    "功率计USB地址"),
+            ("usb.optical_switch", "光开关USB地址")
         ]),
         ("串口配置", [
             ("serial.port_default", "默认串口"),

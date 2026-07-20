@@ -51,6 +51,7 @@ class NetworkInstruments:
 class USBDevices:
     """USB VISA 资源字符串。"""
     optical_switch: str = "USB0::0x0005::0x0012::87104000113::INSTR"
+    power_meter:    str = ""  # 功率计 USB 地址（因设备而异，默认为空，需用户在 GUI 中填写）
 
 
 # ========================== 串口配置 =========================================

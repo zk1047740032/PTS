@@ -158,7 +158,7 @@ class PowerGUI(BaseTestGUI):
                          geometry="1275x510", icon="PreciLasers.ico")
 
         self.params = {
-            "usb_resource": "",
+            "usb_resource": str(CFG.usb.power_meter),
             "save_path": str(CFG.dirs.power),
             "burnin_data": str(CFG.dirs.power / "burnin_data.csv"),
             "burnin_output": str(CFG.dirs.power)
