@@ -108,7 +108,10 @@ class VisaInstrument:
         addr = address or self.address
         for attempt in range(max_retries + 1):
             try:
-                self.rm = pyvisa.ResourceManager()
+                try:
+                    self.rm = pyvisa.ResourceManager("@py")
+                except Exception:
+                    self.rm = pyvisa.ResourceManager()
                 self.inst = self.rm.open_resource(addr)
                 self.inst.timeout = self.timeout_ms
                 self.inst.read_termination = '\n'

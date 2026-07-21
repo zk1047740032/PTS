@@ -57,7 +57,7 @@ class PowerMeterController(VisaInstrument):
 
     def connect(self):
         try:
-            self.rm = pyvisa.ResourceManager()
+            self.rm = pyvisa.ResourceManager("@py")
             self.inst = self.rm.open_resource(self.resource)
             self.inst.timeout = int(self.timeout_ms)
             self.log(f"[PM] 已连接: {self.resource}")
@@ -203,7 +203,7 @@ class PowerGUI(BaseTestGUI):
 
         def list_visa_resources():
             try:
-                rm = pyvisa.ResourceManager()
+                rm = pyvisa.ResourceManager("@py")
                 res = rm.list_resources()
                 usb_res = [item for item in res if 'USB' in item]
                 if not usb_res:

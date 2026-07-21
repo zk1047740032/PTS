@@ -11,7 +11,8 @@ a = Analysis(['main_platform.py'],
 ],
              hiddenimports=[
         # 仪器/UI 底层依赖
-        'pyvisa', 'serial', 'pywinauto',
+        'pyvisa', 'pyvisa_py', 'pyvisa_py.tcpip', 'pyvisa_py.usb',
+        'serial', 'pywinauto',
         # matplotlib / PIL 与 tkinter 集成
         'matplotlib.backends.backend_tkagg', 'PIL._tkinter_finder',
         # docx 报告生成

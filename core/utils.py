@@ -65,8 +65,8 @@ def visa_address(host: str, *, kind: str = "tcpip_instr") -> str:
             host (str): 主机地址。对于 LAN 类为 IP；对 kind="usb" 为完整 USB 资源串，
                         原样透传。
             kind (str): 地址类型：
-                - "tcpip_instr"  -> ``TCPIP0::{ip}::INSTR``            (默认，多数频谱仪/信号源)
-                - "inst0"        -> ``TCPIP0::{ip}::inst0::INSTR``     (R&S FSV3004 等 HiSlipVISA)
+                - "tcpip_instr"  -> ``TCPIP::{ip}::INSTR``               (默认，多数频谱仪/信号源，VXI-11)
+                - "inst0"        -> ``TCPIP::{ip}::inst0::INSTR``      (R&S FSV3004 等，VXI-11)
                 - "socket5025"   -> ``TCPIP::{ip}::5025::SOCKET``      (LXI 原始套接字)
                 - "usb"          -> 透传 host 原样作为 USB 资源串        (光开关/功率计等 USB 设备)
 
@@ -79,9 +79,9 @@ def visa_address(host: str, *, kind: str = "tcpip_instr") -> str:
             避免在每个控制器里重新拼字符串。
     """
     if kind == "tcpip_instr":
-        return f"TCPIP0::{host}::INSTR"
+        return f"TCPIP::{host}::INSTR"
     if kind == "inst0":
-        return f"TCPIP0::{host}::inst0::INSTR"
+        return f"TCPIP::{host}::inst0::INSTR"
     if kind == "socket5025":
         return f"TCPIP::{host}::5025::SOCKET"
     if kind == "usb":

@@ -44,6 +44,8 @@ _BASE_SEED_W        = 330    # 种子参数窗口宽度
 _BASE_SEED_H        = 540    # 种子参数窗口高度
 _BASE_CONFIG_W      = 585    # 配置参数窗口宽度
 _BASE_CONFIG_H      = 620    # 配置参数窗口高度
+_BASE_NETWORK_W     = 337    # 网络配置窗口宽度
+_BASE_NETWORK_H     = 380    # 网络配置窗口高度
 
 # ==========================================
 # 模块注册表 —— 新部门只需改这里 + MODULE_MAP + MODULE_GROUPS
@@ -507,8 +509,8 @@ class IntegratedPlatform:
         btn_group = tk.Frame(status_row, bg=COLOR_BG)
         btn_group.pack(side=tk.RIGHT)
 
-        self.btn_clear_log = self._make_secondary_button(btn_group, "清空日志", self.clear_logs)
-        self.btn_clear_log.pack(side=tk.LEFT, padx=(0, 4))
+        self.btn_network = self._make_secondary_button(btn_group, "网络配置", self.show_network_config)
+        self.btn_network.pack(side=tk.LEFT, padx=(0, 4))
 
         self.btn_help = self._make_secondary_button(btn_group, "说明文档", self.show_help)
         self.btn_help.pack(side=tk.LEFT, padx=(4, 0))
@@ -687,17 +689,11 @@ class IntegratedPlatform:
         # 延迟重新启用控件，确保双击事件完全处理完成
         self.root.after(100, lambda w=widget: w.configure(state="normal"))
     
-    def clear_logs(self):
-        """
-        清空日志区域
-        
-        功能:
-            - 删除日志树视图中的所有日志条目
-        """
-        # 删除所有日志条目
-        for item in self.log_tree.get_children():
-            self.log_tree.delete(item)
-    
+    def show_network_config(self):
+        """打开网络配置弹窗"""
+        from utils.network_config import NetworkConfigDialog
+        NetworkConfigDialog(self.root, width=dpix(_BASE_NETWORK_W), height=dpix(_BASE_NETWORK_H))
+
     def show_help(self):
         """
         显示操作说明文档
