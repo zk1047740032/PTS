@@ -15,12 +15,9 @@ from __future__ import annotations
 
 import ctypes
 import ipaddress
-import os
 import platform
 import re
 import subprocess
-import sys
-import tempfile
 import tkinter as tk
 from tkinter import ttk, messagebox
 from typing import Optional
@@ -527,38 +524,18 @@ class NetworkConfigDialog:
                 messagebox.showerror("配置失败", msg, parent=self.win)
 
     def _run_as_admin(self, adapter: str, ip: str, mask: str):
-        """以管理员权限执行子网配置（写临时脚本 + ShellExecuteW runas）。"""
-        script = (
-            "import subprocess, sys\n"
-            f"adapter = {adapter!r}\n"
-            f"ip = {ip!r}\n"
-            f"mask = {mask!r}\n"
-            "cmd = f'netsh interface ip add address \"{adapter}\" {ip} {mask}'\n"
-            "result = subprocess.run(cmd, shell=True, capture_output=True, text=True)\n"
-            "if result.returncode != 0:\n"
-            "    err = (result.stderr + result.stdout).lower()\n"
-            "    if 'already' in err or 'exists' in err:\n"
-            "        print(f'[OK] IP {ip} already on {adapter}')\n"
-            "        sys.exit(0)\n"
-            "    print(f'[FAIL] {result.stderr.strip() or result.stdout.strip()}')\n"
-            "    sys.exit(1)\n"
-            f"print(f'[OK] Added {ip} to {adapter}')\n"
-        )
-
-        tmp_path = os.path.join(tempfile.gettempdir(), '_pts_subnet_config.py')
-        with open(tmp_path, 'w', encoding='utf-8') as f:
-            f.write(script)
-
+        """以管理员权限执行 netsh（直接调 netsh.exe，打包后也能用）。"""
+        params = f'interface ip add address "{adapter}" {ip} {mask}'
         try:
             ctypes.windll.shell32.ShellExecuteW(
-                None, "runas", sys.executable, f'"{tmp_path}"', None, 1
+                None, "runas", "netsh", params, None, 1
             )
             self._tip_var.set("已提权执行，完成后请点击「检测连通性」验证")
         except Exception as e:
             messagebox.showerror("提权失败",
                                  f"无法以管理员权限运行: {e}\n\n"
                                  "请右键以管理员身份运行本程序，或手动执行：\n"
-                                 f'netsh interface ip add address "{adapter}" {ip} {mask}',
+                                 f'netsh {params}',
                                  parent=self.win)
 
     def _remove_subnet(self):
@@ -570,27 +547,10 @@ class NetworkConfigDialog:
             return
 
         if not self._is_admin():
-            script = (
-                "import subprocess, sys\n"
-                f"adapter = {adapter!r}\n"
-                f"ip = {ip!r}\n"
-                "cmd = f'netsh interface ip delete address \"{adapter}\" {ip}'\n"
-                "result = subprocess.run(cmd, shell=True, capture_output=True, text=True)\n"
-                "if result.returncode != 0:\n"
-                "    err = (result.stderr + result.stdout).lower()\n"
-                "    if 'not' in err or 'not exist' in err:\n"
-                "        print(f'[OK] IP {ip} not on {adapter}')\n"
-                "        sys.exit(0)\n"
-                "    print(f'[FAIL] {result.stderr.strip()}')\n"
-                "    sys.exit(1)\n"
-                f"print(f'[OK] Removed {ip} from {adapter}')\n"
-            )
-            tmp_path = os.path.join(tempfile.gettempdir(), '_pts_subnet_remove.py')
-            with open(tmp_path, 'w', encoding='utf-8') as f:
-                f.write(script)
+            params = f'interface ip delete address "{adapter}" {ip}'
             try:
                 ctypes.windll.shell32.ShellExecuteW(
-                    None, "runas", sys.executable, f'"{tmp_path}"', None, 1
+                    None, "runas", "netsh", params, None, 1
                 )
                 self._tip_var.set("已提权执行移除，完成后请点击「检测连通性」验证")
             except Exception as e:
