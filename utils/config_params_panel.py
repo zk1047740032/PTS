@@ -334,6 +334,10 @@ PARAM_SCHEMA: OrderedDict[str, OrderedDict[str, list[tuple[str, str]]]] = Ordere
 
     # ======================== 相噪 (path_a/PhaseNoise.py) ========================
     ("相噪", OrderedDict([
+        ("程序路径", [
+            ("phase_noise.program_1um",   "1μm 程序路径"),
+            ("phase_noise.program_1_5um", "1.5μm 程序路径"),
+        ]),
         ("文件 / 阈值", [
             ("phase_noise.wavelength_file",          "波长文件路径"),
             ("phase_noise.wavelength_threshold_nm",  "波长阈值 (nm)"),

@@ -16,6 +16,7 @@ from utils.theme import (
     COLOR_BG, COLOR_WHITE, COLOR_CARD_BG, COLOR_CARD_BORDER,
     COLOR_SECTION_BG, COLOR_SECTION_FG,
     COLOR_TEXT_PRIMARY, COLOR_TEXT_SECONDARY, COLOR_TEXT_MUTED,
+    COLOR_ENTRY_BORDER, COLOR_ENTRY_BG,
     COLOR_ACCENT, COLOR_ACCENT_HOVER,
     COLOR_SUCCESS, COLOR_WARNING,
     COLOR_LOG_ERROR, COLOR_LOG_COMPLETED, COLOR_LOG_RUNNING, COLOR_LOG_CLICKABLE,
@@ -33,14 +34,14 @@ from core.config import CFG
 
 # ---- 基准尺寸（以 96 DPI / 100% 系统缩放为基准设计） ----
 _BASE_WINDOW_W      = 666   # 主窗口宽度
-_BASE_WINDOW_H      = 450    # 主窗口高度
+_BASE_WINDOW_H      = 400    # 主窗口高度
 _BASE_LEFT_PANEL_W  = 275    # 左侧控制面板宽度
 _BASE_RESULT_W      = 370    # 测试结果弹窗宽度
 _BASE_RESULT_H      = 410    # 测试结果弹窗高度
 _BASE_HELP_W        = 650   # 说明文档窗口宽度
 _BASE_HELP_H        = 480    # 说明文档窗口高度
-_BASE_SEED_W        = 390    # 种子参数窗口宽度
-_BASE_SEED_H        = 328    # 种子参数窗口高度
+_BASE_SEED_W        = 330    # 种子参数窗口宽度
+_BASE_SEED_H        = 540    # 种子参数窗口高度
 _BASE_CONFIG_W      = 585    # 配置参数窗口宽度
 _BASE_CONFIG_H      = 620    # 配置参数窗口高度
 
@@ -227,7 +228,13 @@ class IntegratedPlatform:
         """
         self.root = root
         self.root.title("PTS-种子")
-        self.root.geometry(f"{dpix(_BASE_WINDOW_W)}x{dpix(_BASE_WINDOW_H)}")
+        # 窗口居中
+        ww, wh = dpix(_BASE_WINDOW_W), dpix(_BASE_WINDOW_H)
+        sw = self.root.winfo_screenwidth()
+        sh = self.root.winfo_screenheight()
+        x = (sw - ww) // 2
+        y = (sh - wh) // 2
+        self.root.geometry(f"{ww}x{wh}+{x}+{y}")
         try:
             self.root.iconbitmap("PreciLasers.ico")
         except:
@@ -380,9 +387,11 @@ class IntegratedPlatform:
 
         # ---- 测试项卡片 ----
         card = tk.Frame(panel, bg=COLOR_CARD_BG,
-                        highlightbackground=COLOR_CARD_BORDER,
-                        highlightthickness=1)
+                highlightbackground=COLOR_CARD_BORDER,
+                highlightthickness=1,
+                height=dpix(170))   # 设一个最小高度
         card.pack(fill=tk.BOTH, expand=True, padx=PADDING_SECTION, pady=(0, 10))
+        card.pack_propagate(False)          # 阻止内容撑大/缩小时覆盖 height
 
         self._build_notebook(card)
 
@@ -692,39 +701,92 @@ class IntegratedPlatform:
     def show_help(self):
         """
         显示操作说明文档
-        
+
         功能:
             - 创建一个新的窗口显示操作说明文档
             - 从 user_guide 模块导入 USER_GUIDE 内容并显示
             - 提供滚动条和关闭按钮
         """
-        # 创建说明文档窗口
+        from utils.user_guide import USER_GUIDE
+
         help_window = tk.Toplevel(self.root)
         help_window.title("操作说明")
         help_window.geometry(f"{dpix(_BASE_HELP_W)}x{dpix(_BASE_HELP_H)}")
-        help_window.resizable(False, False)
-        
-        # 创建滚动文本区域
-        text_frame = tk.Frame(help_window)
-        text_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
-        
-        scrollbar = ttk.Scrollbar(text_frame)
+        help_window.resizable(True, True)
+        help_window.configure(bg=COLOR_BG)
+        help_window.transient(self.root)
+
+        try:
+            help_window.iconbitmap("PreciLasers.ico")
+        except Exception:
+            pass
+
+        # ---- 标题栏 ----
+        header = tk.Frame(help_window, bg=COLOR_BG)
+        header.pack(fill=tk.X, padx=PADDING_SECTION, pady=(16, 0))
+
+        accent = tk.Frame(header, bg=COLOR_ACCENT, width=4, height=22)
+        accent.pack(side=tk.LEFT, padx=(0, 10))
+        accent.pack_propagate(False)
+
+        tk.Label(header, text="操作说明",
+                 font=(FONT_FAMILY, FONT_SIZE_HEADING, "bold"),
+                 fg=COLOR_TEXT_PRIMARY, bg=COLOR_BG).pack(side=tk.LEFT)
+
+        tk.Label(header, text="PTS 频准测试系统使用指南",
+                 font=(FONT_FAMILY, FONT_SIZE_CAPTION),
+                 fg=COLOR_TEXT_MUTED, bg=COLOR_BG).pack(side=tk.LEFT, padx=(14, 0), pady=(6, 0))
+
+        # ---- 内容卡片 ----
+        card = tk.Frame(help_window, bg=COLOR_CARD_BG,
+                        highlightbackground=COLOR_ENTRY_BORDER,
+                        highlightthickness=1, bd=0)
+        card.pack(fill=tk.BOTH, expand=True, padx=PADDING_SECTION, pady=(12, 0))
+
+        # 内边距容器
+        inner = tk.Frame(card, bg=COLOR_CARD_BG)
+        inner.pack(fill=tk.BOTH, expand=True, padx=4, pady=4)
+
+        scrollbar = ttk.Scrollbar(inner)
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-        
-        help_text = tk.Text(text_frame, wrap=tk.WORD, yscrollcommand=scrollbar.set, font=("微软雅黑", 10))
+
+        help_text = tk.Text(inner, wrap=tk.WORD, yscrollcommand=scrollbar.set,
+                           font=(FONT_FAMILY, FONT_SIZE_BODY),
+                           bg=COLOR_CARD_BG, fg=COLOR_TEXT_PRIMARY,
+                           relief="flat", bd=0, highlightthickness=0,
+                           padx=14, pady=10,
+                           insertbackground=COLOR_ACCENT,
+                           selectbackground=COLOR_ACCENT,
+                           selectforeground=COLOR_WHITE)
         help_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        
         scrollbar.config(command=help_text.yview)
-        
-        # 插入说明文本 - 从独立文件引入
-        from utils.user_guide import USER_GUIDE
+
         help_text.insert(tk.END, USER_GUIDE)
-        help_text.config(state=tk.DISABLED)  # 设置为只读
-        
-        # 添加关闭按钮
-        close_button = ttk.Button(help_window, text="关闭", 
-                               command=help_window.destroy, width=10, cursor="hand2")
-        close_button.pack(pady=10)
+        help_text.config(state=tk.DISABLED)
+
+        # ---- 底部按钮栏 ----
+        bottom = tk.Frame(help_window, bg=COLOR_BG)
+        bottom.pack(fill=tk.X, padx=PADDING_SECTION, pady=(8, 14))
+
+        close_btn = tk.Button(bottom, text="关闭",
+                              font=(FONT_FAMILY, FONT_SIZE_BODY),
+                              bg=COLOR_CARD_BORDER, fg=COLOR_TEXT_SECONDARY,
+                              activebackground="#D0D5DB", activeforeground=COLOR_TEXT_PRIMARY,
+                              relief="solid", bd=1, padx=16, pady=5,
+                              command=help_window.destroy, cursor="hand2")
+        close_btn.pack(side=tk.RIGHT)
+
+        # ---- 居中 ----
+        help_window.update_idletasks()
+        pw = self.root.winfo_width()
+        ph = self.root.winfo_height()
+        px = self.root.winfo_x()
+        py = self.root.winfo_y()
+        dw = help_window.winfo_width()
+        dh = help_window.winfo_height()
+        x = px + (pw - dw) // 2
+        y = py + (ph - dh) // 2
+        help_window.geometry(f"+{x}+{y}")
 
     def show_seed_params(self):
         """
@@ -740,31 +802,28 @@ class IntegratedPlatform:
         seed_window.title("种子参数")
         seed_window.geometry(f"{dpix(_BASE_SEED_W)}x{dpix(_BASE_SEED_H)}")
         seed_window.resizable(True, True)
+        seed_window.configure(bg=COLOR_BG)
+        seed_window.transient(self.root)
 
-        # 嵌入查询面板
-        panel = SeedParamsPanel(seed_window)
+        try:
+            seed_window.iconbitmap("PreciLasers.ico")
+        except Exception:
+            pass
 
-        # 底部按钮
-        bottom_frame = ttk.Frame(seed_window, padding=6)
-        bottom_frame.pack(fill=tk.X)
+        # 嵌入查询面板（含底部按钮）
+        SeedParamsPanel(seed_window)
 
-        record_hint = tk.StringVar(value='')
-        hint_label = ttk.Label(bottom_frame, textvariable=record_hint,
-                               font=('', 8), foreground='gray')
-        hint_label.pack(side=tk.LEFT, padx=4)
-
-        def do_record():
-            panel.record_to_csv()
-            record_hint.set('记录成功')
-            seed_window.after(3000, lambda: record_hint.set(''))
-
-        close_button = ttk.Button(bottom_frame, text="关闭",
-                                  command=seed_window.destroy, width=10, cursor="hand2")
-        close_button.pack(side=tk.RIGHT, padx=8)
-
-        record_btn = ttk.Button(bottom_frame, text="记录",
-                                command=do_record, width=10, cursor="hand2")
-        record_btn.pack(side=tk.RIGHT, padx=4)
+        # 居中于父窗口
+        seed_window.update_idletasks()
+        pw = self.root.winfo_width()
+        ph = self.root.winfo_height()
+        px = self.root.winfo_x()
+        py = self.root.winfo_y()
+        dw = seed_window.winfo_width()
+        dh = seed_window.winfo_height()
+        x = px + (pw - dw) // 2
+        y = py + (ph - dh) // 2
+        seed_window.geometry(f"+{x}+{y}")
 
     def show_config_params(self):
         """
@@ -784,6 +843,17 @@ class IntegratedPlatform:
 
         # 先让窗口壳子显示出来，再构建内容（避免用户感觉卡顿）
         config_window.update_idletasks()
+
+        # 居中于父窗口
+        pw = self.root.winfo_width()
+        ph = self.root.winfo_height()
+        px = self.root.winfo_x()
+        py = self.root.winfo_y()
+        dw = config_window.winfo_width()
+        dh = config_window.winfo_height()
+        x = px + (pw - dw) // 2
+        y = py + (ph - dh) // 2
+        config_window.geometry(f"+{x}+{y}")
 
         # 嵌入配置面板
         ConfigParamsPanel(config_window)

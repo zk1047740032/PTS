@@ -86,8 +86,8 @@ class PhaseNoiseGUI(BaseTestGUI):
                          geometry="1140x420", icon="PreciLasers.ico")
 
         self.wavelength_path = tk.StringVar(value=str(CFG.dirs.wavelength / "wavelength.csv"))
-        self.program_1um = tk.StringVar(value="")
-        self.program_1_5um = tk.StringVar(value="")
+        self.program_1um = tk.StringVar(value=str(CFG.phase_noise.program_1um))
+        self.program_1_5um = tk.StringVar(value=str(CFG.phase_noise.program_1_5um))
 
         self._build_ui()
 

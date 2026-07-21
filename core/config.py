@@ -352,6 +352,8 @@ class PowerParams:
 @dataclass(frozen=True)
 class PhaseNoiseParams:
     """相位噪声测试默认值。"""
+    program_1um:            str = ""
+    program_1_5um:          str = ""
     wavelength_file:        str = r"C:\PTS\zhongzi\WaveLength\wavelength.csv"
     wavelength_threshold_nm: float = 1500.0
     click_retries:          int   = 3
