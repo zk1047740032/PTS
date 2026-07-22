@@ -116,3 +116,7 @@ class OpticalSwitch(VisaInstrument):
         """关闭光开关连接（复用 VisaInstrument.close，释放 inst 与 rm）"""
         super().close()
         self.log("[光开关] 连接已关闭")
+
+if __name__ == "__main__":
+    sw = OpticalSwitch("USB0::0x0005::0x0012::87104000113::INSTR", print)
+    sw.connect()

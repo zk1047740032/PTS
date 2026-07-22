@@ -56,8 +56,8 @@ MODULE_REGISTRY = {
     "时域":           ("path_a.TimeDomain",      "TimeDomainGUI"),
     "信噪比":         ("path_a.SpectrumSNR",     "SpectrumSNRGUI"),
     "单频":           ("path_a.SingleFrequency", "SingleFrequencyGUI"),
-    "功率":           ("path_a.Power",           "PowerGUI"),
-    "PZT调制":        ("path_b.WaveLength",      "WaveLengthTestGUI"),
+    "功率":           ("path_b.Power",           "PowerGUI"),
+    "PZT调制":        ("path_a.WaveLength",      "WaveLengthTestGUI"),
     "相噪":           ("path_a.PhaseNoise",      "PhaseNoiseGUI"),
 }
 

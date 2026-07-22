@@ -24,8 +24,8 @@
 import sys
 
 # wlmData.dll related imports
-import wlmConst
-import wlmData
+import path_a.drivers.wlmConst as wlmConst
+import path_a.drivers.wlmData as wlmData
 
 # Load wlmData library. If needed, adjust the path by passing it to LoadDLL()!
 try:

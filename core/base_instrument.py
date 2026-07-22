@@ -132,7 +132,7 @@ class VisaInstrument:
                     )
                     time.sleep(retry_interval)
                 else:
-                    self.log(f"[仪器] 连接失败，共尝试{max_retries + 1}次")
+                    self.log(f"[仪器] 连接失败，共尝试{max_retries + 1}次：{e}")
                     return False
         return False
 
