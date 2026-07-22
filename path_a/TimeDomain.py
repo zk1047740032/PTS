@@ -307,6 +307,12 @@ class TimeDomainGUI(BaseTestGUI):
         self.log("[设置] 参数已更新")
 
     def start_test(self):
+        """启动后台测试线程，避免阻塞 UI 日志更新。"""
+        self.update_params()
+        self.start_worker(self._run_test)
+
+    def _run_test(self):
+        """后台线程执行的测试逻辑。"""
         td = TimeDomain(self.params, self.log)
         try:
             td.connect_instruments()

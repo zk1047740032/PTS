@@ -108,11 +108,22 @@ class VisaInstrument:
         addr = address or self.address
         for attempt in range(max_retries + 1):
             try:
-                try:
-                    self.rm = pyvisa.ResourceManager("@py")
-                except Exception:
-                    self.rm = pyvisa.ResourceManager()
-                self.inst = self.rm.open_resource(addr)
+                # 优先 @py 纯 Python 后端（无需 NI-VISA），打不开资源时回退默认后端
+                for backend_tag in ("@py", ""):
+                    try:
+                        self.rm = (pyvisa.ResourceManager(backend_tag)
+                                   if backend_tag else pyvisa.ResourceManager())
+                        self.inst = self.rm.open_resource(addr)
+                        break
+                    except Exception:
+                        if self.rm:
+                            try:
+                                self.rm.close()
+                            except Exception:
+                                pass
+                            self.rm = None
+                else:
+                    raise RuntimeError(f"所有 VISA 后端都无法打开资源: {addr}")
                 self.inst.timeout = self.timeout_ms
                 self.inst.read_termination = '\n'
                 self.inst.write_termination = '\n'

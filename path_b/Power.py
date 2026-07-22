@@ -56,14 +56,27 @@ class PowerMeterController(VisaInstrument):
         self.resource = resource  # 业务字段，对应基类 self.address
 
     def connect(self):
-        try:
-            self.rm = pyvisa.ResourceManager("@py")
-            self.inst = self.rm.open_resource(self.resource)
-            self.inst.timeout = int(self.timeout_ms)
-            self.log(f"[PM] 已连接: {self.resource}")
-        except Exception as e:
-            self.log(f"[PM] 连接失败: {e}")
-            raise
+        # 优先 @py 纯 Python 后端，打不开资源时回退默认后端（NI-VISA ivi）
+        tried = []
+        for backend_tag in ("@py", ""):
+            try:
+                self.rm = (pyvisa.ResourceManager(backend_tag)
+                           if backend_tag else pyvisa.ResourceManager())
+                self.inst = self.rm.open_resource(self.resource)
+                self.inst.timeout = int(self.timeout_ms)
+                self.log(f"[PM] 已连接: {self.resource}")
+                return
+            except Exception as e:
+                tried.append(f"{backend_tag or 'default'}: {e}")
+                if self.rm:
+                    try:
+                        self.rm.close()
+                    except Exception:
+                        pass
+                    self.rm = None
+        err_msg = f"[PM] 连接失败，所有后端都打不开 {self.resource}: {' | '.join(tried)}"
+        self.log(err_msg)
+        raise RuntimeError(err_msg)
 
     def query_idn(self) -> str:
         try:
@@ -202,18 +215,32 @@ class PowerGUI(BaseTestGUI):
         buttons_container.pack(side=tk.TOP, anchor=tk.CENTER)
 
         def list_visa_resources():
-            try:
-                rm = pyvisa.ResourceManager("@py")
-                res = rm.list_resources()
-                usb_res = [item for item in res if 'USB' in item]
-                if not usb_res:
-                    self.log("[Diag] 未发现任何可用 USB 资源。")
-                else:
-                    self.log("[Diag] 可用USB资源：")
-                    for r in usb_res:
-                        self.log(f"- {r}")
-            except Exception as e:
-                self.log(f"[Diag] USB 资源枚举失败: {e}")
+            # 优先 @py，回退默认后端。注意：@py 可能成功创建 RM 却
+            # 找不到 USB 设备（比如仪器用的是 NI-VISA 驱动而非 WinUSB），
+            # 此时继续尝试默认后端，避免空手而归。
+            usb_res = []
+            for backend_tag in ("@py", ""):
+                label = backend_tag or "默认"
+                try:
+                    rm = (pyvisa.ResourceManager(backend_tag)
+                          if backend_tag else pyvisa.ResourceManager())
+                    res = rm.list_resources()
+                    usb_res = [item for item in res if 'USB' in item]
+                    rm.close()
+                    if usb_res:
+                        self.log(f"[Diag] 通过 {label} 后端找到 USB 资源")
+                        break
+                    else:
+                        self.log(f"[Diag] {label} 后端未发现 USB 资源，继续尝试下一个...")
+                except Exception as e:
+                    self.log(f"[Diag] {label} 后端枚举失败: {e}")
+                    continue
+            if not usb_res:
+                self.log("[Diag] 未发现任何可用 USB 资源。")
+            else:
+                self.log("[Diag] 可用USB资源：")
+                for r in usb_res:
+                    self.log(f"- {r}")
 
         self.btn_list_resources = tk.Button(buttons_container, text="地址",
                                             command=list_visa_resources,

@@ -787,11 +787,18 @@ class ConfigParamsPanel:
         return data
 
     def _save(self):
-        """收集并保存当前配置到 JSON 文件。"""
-        data = self._collect_values()
-        save_user_overrides(data)
+        """收集并保存当前配置到 JSON 文件。
+
+        注意：必须与已有覆盖配置合并，不能全量覆盖，
+        否则本次未改动的已有覆盖项会丢失。
+        """
+        new_overrides = self._collect_values()
+        # 合并已有覆盖：加载旧文件 → 更新本次改动 → 写回
+        merged = load_user_overrides()
+        merged.update(new_overrides)
+        save_user_overrides(merged)
         # 立即应用到 CFG
-        for key, value_str in data.items():
+        for key, value_str in new_overrides.items():
             set_cfg_value(key, value_str)
         self._show_status("配置已保存，重启程序后自动加载", "green")
 

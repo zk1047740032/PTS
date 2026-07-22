@@ -163,7 +163,7 @@ def assemble_report_data():
         # ---- 输出功率 ----
         "text_power": _read_csv_cell(
             r"C:\PTS\zhongzi\Power\power.csv",
-            row_idx=0, col_idx=0, cast=float, fallback="(未读取到功率数据)",
+            row_idx=0, col_idx=0, cast=lambda v: float(v) / 0.03, fallback="(未读取到功率数据)",
         ),
 
         # ---- 功率稳定性 ----

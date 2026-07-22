@@ -41,12 +41,22 @@ from utils.theme import (
 # ================================================================
 
 def _run_netsh(args: str) -> tuple[int, str, str]:
-    """执行 netsh 命令，返回 (returncode, stdout, stderr)。"""
-    result = subprocess.run(
-        f'netsh {args}',
-        shell=True, capture_output=True, text=True
-    )
-    return result.returncode, result.stdout, result.stderr
+    """执行 netsh 命令，返回 (returncode, stdout, stderr)。
+
+    注意：netsh 经常将错误信息输出到 stdout 而非 stderr，
+    调用方应同时检查两者。"""
+    try:
+        result = subprocess.run(
+            f'netsh {args}',
+            shell=True, capture_output=True, text=True
+        )
+        return result.returncode, result.stdout, result.stderr
+    except FileNotFoundError:
+        return 1, "", "netsh 命令未找到（系统路径异常）"
+    except subprocess.TimeoutExpired:
+        return 1, "", "netsh 命令执行超时"
+    except Exception as e:
+        return 1, "", f"执行 netsh 时出错: {e}"
 
 
 def get_active_adapters() -> list[dict[str, str]]:
@@ -134,13 +144,19 @@ def _suggest_local_ip(subnet_cidr: str) -> Optional[str]:
 
 def ping(ip: str, timeout_ms: int = 800) -> bool:
     """ping 目标 IP，返回是否可达。"""
-    param = "-n 1 -w" if platform.system() == "Windows" else "-c 1 -W"
-    timeout = str(timeout_ms // 1000) if platform.system() == "Windows" else str(timeout_ms // 1000)
+    if platform.system() == "Windows":
+        # Windows ping: -n 1 (1 packet), -w <ms> (timeout in milliseconds)
+        cmd = f"ping -n 1 -w {timeout_ms} {ip}"
+        proc_timeout = timeout_ms / 1000 + 2
+    else:
+        # Linux/macOS ping: -c 1 (1 packet), -W <sec> (timeout in seconds)
+        timeout_sec = max(1, timeout_ms // 1000)
+        cmd = f"ping -c 1 -W {timeout_sec} {ip}"
+        proc_timeout = timeout_sec + 2
     try:
         result = subprocess.run(
-            f"ping {param} {timeout} {ip}",
-            shell=True, capture_output=True, text=True,
-            timeout=timeout_ms / 1000 + 1
+            cmd, shell=True, capture_output=True, text=True,
+            timeout=proc_timeout
         )
         return result.returncode == 0
     except Exception:
@@ -154,9 +170,21 @@ def add_secondary_ip(adapter: str, ip: str, mask: str = "255.255.255.0") -> tupl
     )
     if rc == 0:
         return True, f"辅助 IP {ip} 已添加到「{adapter}」"
-    if 'already' in err.lower() or '已存在' in err or '存在' in err:
+
+    # netsh 常把提示/错误输出到 stdout，合并检查
+    combined = f"{out}\n{err}".lower()
+    if any(kw in combined for kw in ('already', '已存在', '存在', 'already exists')):
         return True, f"IP {ip} 已存在于「{adapter}」（无需重复添加）"
-    return False, f"添加失败: {err.strip() or '未知错误'}"
+
+    # 提取有意义的错误信息（优先 stderr，其次 stdout）
+    detail = (err.strip() or out.strip() or "未知错误")
+    # 常见中文 netsh 错误消息截取关键行
+    for line in detail.splitlines():
+        line = line.strip()
+        if line and not line.startswith('netsh'):
+            detail = line
+            break
+    return False, f"添加失败: {detail}"
 
 
 def remove_secondary_ip(adapter: str, ip: str) -> tuple[bool, str]:
@@ -166,9 +194,20 @@ def remove_secondary_ip(adapter: str, ip: str) -> tuple[bool, str]:
     )
     if rc == 0:
         return True, f"已从「{adapter}」移除 IP {ip}"
-    if 'not' in err.lower() or '不存在' in err or '找不到' in err:
+
+    # netsh 常把提示/错误输出到 stdout，合并检查
+    combined = f"{out}\n{err}".lower()
+    if any(kw in combined for kw in ('not', '不存在', '找不到', 'not found', 'does not exist')):
         return True, f"IP {ip} 在「{adapter}」上不存在（无需移除）"
-    return False, f"移除失败: {err.strip() or '未知错误'}"
+
+    # 提取有意义的错误信息（优先 stderr，其次 stdout）
+    detail = (err.strip() or out.strip() or "未知错误")
+    for line in detail.splitlines():
+        line = line.strip()
+        if line and not line.startswith('netsh'):
+            detail = line
+            break
+    return False, f"移除失败: {detail}"
 
 
 # ================================================================
@@ -523,20 +562,60 @@ class NetworkConfigDialog:
             else:
                 messagebox.showerror("配置失败", msg, parent=self.win)
 
+    # ---- ShellExecuteW 错误码 ----
+    _SE_ERR_ACCESSDENIED     = 5
+    _SE_ERR_ASSOCINCOMPLETE  = 27
+    _SE_ERR_DDEBUSY          = 28
+    _SE_ERR_DDEFAIL          = 29
+    _SE_ERR_DDETIMEOUT       = 30
+    _SE_ERR_DLLNOTFOUND      = 31
+    _SE_ERR_NOASSOC          = 32
+    _SE_ERR_OOM              = 8
+    _SE_ERR_SHARE            = 26
+
+    _SHELL_EXECUTE_ERROR_MAP = {
+        _SE_ERR_ACCESSDENIED:    "拒绝访问（需要管理员权限或 UAC 已禁用）",
+        _SE_ERR_ASSOCINCOMPLETE: "文件关联不完整",
+        _SE_ERR_DDEBUSY:         "DDE 事务繁忙",
+        _SE_ERR_DDEFAIL:         "DDE 事务失败",
+        _SE_ERR_DDETIMEOUT:      "DDE 事务超时",
+        _SE_ERR_DLLNOTFOUND:     "缺少必要的 DLL 文件",
+        _SE_ERR_NOASSOC:         "没有关联的程序可以打开此文件",
+        _SE_ERR_OOM:             "系统内存不足",
+        _SE_ERR_SHARE:           "共享冲突",
+    }
+
     def _run_as_admin(self, adapter: str, ip: str, mask: str):
         """以管理员权限执行 netsh（直接调 netsh.exe，打包后也能用）。"""
         params = f'interface ip add address "{adapter}" {ip} {mask}'
         try:
-            ctypes.windll.shell32.ShellExecuteW(
-                None, "runas", "netsh", params, None, 1
+            ret = ctypes.windll.shell32.ShellExecuteW(
+                None, "runas", "netsh.exe", params, None, 1
             )
-            self._tip_var.set("已提权执行，完成后请点击「检测连通性」验证")
+            if ret > 32:
+                # ShellExecuteW 成功启动了提权进程
+                self._tip_var.set("已提权执行，2 秒后自动检测连通性...")
+                self.win.after(2000, self._refresh_status)
+            else:
+                # ret ≤ 32 表示错误
+                err_desc = self._SHELL_EXECUTE_ERROR_MAP.get(
+                    ret, f"ShellExecute 返回错误码 {ret}"
+                )
+                messagebox.showerror(
+                    "提权失败",
+                    f"无法以管理员权限启动 netsh: {err_desc}\n\n"
+                    "请右键以管理员身份运行本程序，或手动在管理员终端执行：\n"
+                    f'netsh {params}',
+                    parent=self.win
+                )
         except Exception as e:
-            messagebox.showerror("提权失败",
-                                 f"无法以管理员权限运行: {e}\n\n"
-                                 "请右键以管理员身份运行本程序，或手动执行：\n"
-                                 f'netsh {params}',
-                                 parent=self.win)
+            messagebox.showerror(
+                "提权失败",
+                f"无法以管理员权限运行: {e}\n\n"
+                "请右键以管理员身份运行本程序，或手动执行：\n"
+                f'netsh {params}',
+                parent=self.win
+            )
 
     def _remove_subnet(self):
         """移除已配置的辅助 IP。"""
@@ -549,16 +628,30 @@ class NetworkConfigDialog:
         if not self._is_admin():
             params = f'interface ip delete address "{adapter}" {ip}'
             try:
-                ctypes.windll.shell32.ShellExecuteW(
-                    None, "runas", "netsh", params, None, 1
+                ret = ctypes.windll.shell32.ShellExecuteW(
+                    None, "runas", "netsh.exe", params, None, 1
                 )
-                self._tip_var.set("已提权执行移除，完成后请点击「检测连通性」验证")
+                if ret > 32:
+                    self._tip_var.set("已提权执行移除，2 秒后自动检测连通性...")
+                    self.win.after(2000, self._refresh_status)
+                else:
+                    err_desc = self._SHELL_EXECUTE_ERROR_MAP.get(
+                        ret, f"ShellExecute 返回错误码 {ret}"
+                    )
+                    messagebox.showerror(
+                        "提权失败",
+                        f"无法以管理员权限启动 netsh: {err_desc}\n\n"
+                        "请右键以管理员身份运行本程序，或手动在管理员终端执行：\n"
+                        f'netsh {params}',
+                        parent=self.win
+                    )
             except Exception as e:
                 messagebox.showerror("提权失败", f"无法以管理员权限运行: {e}", parent=self.win)
         else:
             ok, msg = remove_secondary_ip(adapter, ip)
             if ok:
                 self._tip_var.set(msg)
+                self.win.after(500, self._refresh_status)
             else:
                 messagebox.showerror("移除失败", msg, parent=self.win)
 
