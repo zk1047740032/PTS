@@ -62,19 +62,20 @@ MODULE_REGISTRY = {
 }
 
 # 【修改点 1】：函数签名增加 cmd_queue (命令队列)
-def run_module_process(module_name, start_method, msg_queue, cmd_queue):
+def run_module_process(module_name, start_method, msg_queue, cmd_queue, one_click_test=False):
     """
         运行指定模块的进程，负责初始化 GUI 界面并处理测试命令
-    
+
     该函数根据模块名称导入对应的 GUI 类，创建实例，并监听命令队列以执行测试。
     同时通过消息队列向主进程报告模块状态。
-    
+
     参数:
         module_name (str): 模块名称，用于确定要导入的 GUI 类
         start_method (str): 启动测试的方法名称，当收到 START 命令时会调用该方法
         msg_queue (Queue): 消息队列，用于向主进程发送状态消息
         cmd_queue (Queue): 命令队列，用于接收主进程发送的命令（如 START）
-    
+        one_click_test (bool): 是否由"一键测试"按钮启动。影响测试结束后窗口是否自动关闭。
+
     执行流程:
         1. 根据模块名称导入对应的 GUI 类
         2. 向消息队列发送模块启动状态
@@ -84,7 +85,7 @@ def run_module_process(module_name, start_method, msg_queue, cmd_queue):
         6. 启动命令队列监听循环
         7. 运行 GUI 主循环
         8. 向消息队列发送模块完成状态
-    
+
     异常处理:
         - 捕获导入模块失败的异常
         - 捕获执行测试过程中的异常
@@ -110,7 +111,8 @@ def run_module_process(module_name, start_method, msg_queue, cmd_queue):
         msg_queue.put((module_name, "running", f"正在启动 {module_name} 窗口..."))
 
         app_instance = gui_class(None)
-        
+        app_instance._one_click_test = one_click_test
+
         try:
             app_instance.root.title(f"{module_name} [就绪]")
         except:
@@ -894,7 +896,7 @@ class IntegratedPlatform:
         
         p = multiprocessing.Process(
             target=run_module_process,
-            args=(name, start_method, self.msg_queue, cmd_q),
+            args=(name, start_method, self.msg_queue, cmd_q, auto_start),
             daemon=True
         )
         p.start()
