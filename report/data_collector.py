@@ -151,7 +151,7 @@ def assemble_report_data():
         "img_linewidth": r"C:\PTS\zhongzi\LineWidth\image_1000.png",
         "text_linewidth": _read_csv_cell(
             r"C:\PTS\zhongzi\LineWidth\ndbdown.csv",
-            row_idx=4, col_idx=0, cast=float, fallback="(未读取到Ndbdown数据)",
+            row_idx=1, col_idx=0, cast=float, fallback="(未读取到Ndbdown数据)",
         ),
 
         # ---- 单频 ----
@@ -163,7 +163,7 @@ def assemble_report_data():
         # ---- 输出功率 ----
         "text_power": _read_csv_cell(
             r"C:\PTS\zhongzi\Power\power.csv",
-            row_idx=0, col_idx=0, cast=lambda v: float(v) / 0.03, fallback="(未读取到功率数据)",
+            row_idx=0, col_idx=0, cast=lambda v: f"{float(v) / 0.03:.2f}", fallback="(未读取到功率数据)",
         ),
 
         # ---- 功率稳定性 ----

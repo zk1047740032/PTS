@@ -641,8 +641,8 @@ class WaveLengthTestGUI(BaseTestGUI):
             # X轴：整个宽度减去 12 像素（紧贴右边缘）
             # Y轴：从上边缘往下 12 像素
             # （12像素通常是这种16x16或24x24小图标的正中心）
-            click_x = width - CFG.wavelength.chart_expand_offset_x
-            click_y = CFG.wavelength.chart_expand_offset_y
+            click_x = width - CFG.wavelength.top_right_arrow_offset_x
+            click_y = CFG.wavelength.top_right_arrow_offset_y
 
             # 先移动鼠标过去，停顿0.1秒（让老软件有时间触发悬停效果）
             ctrl.move_mouse_input(coords=(click_x, click_y))
@@ -745,8 +745,8 @@ class WaveLengthTestGUI(BaseTestGUI):
             bottom_rect = bottom_chart.rectangle()
 
             # 3. 十字交叉定位：下方最右侧向左退 12 像素，上方最顶端向下移 12 像素
-            abs_x = bottom_rect.right - CFG.wavelength.stats_close_offset_x
-            abs_y = top_rect.top + CFG.wavelength.stats_close_offset_y
+            abs_x = bottom_rect.right - CFG.wavelength.close_panel_offset_x
+            abs_y = top_rect.top + CFG.wavelength.close_panel_offset_y
 
             # 引入全局鼠标控制器，直接进行屏幕绝对坐标的物理点击
             import pywinauto.mouse as mouse
@@ -917,7 +917,7 @@ class WaveLengthTestGUI(BaseTestGUI):
 
             wavelength = self.wavemeter.get_wavelength()
             if wavelength:
-                wavelength_csv_path = os.path.join(output_dir, CFG.wavelength.wavelength_filename)
+                wavelength_csv_path = os.path.join(output_dir, CFG.wavelength.wavelength_csv_filename)
                 try:
                     with open(wavelength_csv_path, 'w', newline='', encoding='utf-8') as f:
                         writer = csv.writer(f)
@@ -940,7 +940,7 @@ class WaveLengthTestGUI(BaseTestGUI):
                 reset_window_title1,
                 "Reset按钮",
                 class_name="TPanel",
-                found_index=CFG.wavelength.reset_btn_found_index
+                found_index=CFG.wavelength.reset_panel_found_index
             )
 
             self.log("[步骤4.5] 略微延迟")
@@ -1022,7 +1022,7 @@ class WaveLengthTestGUI(BaseTestGUI):
                     reset_window_title,
                     "Reset按钮",
                     class_name="TPanel",
-                    found_index=CFG.wavelength.reset_btn_found_index
+                    found_index=CFG.wavelength.reset_panel_found_index
                 )
 
                 self.log(f"[等待] 等待调制时间（{collect_time}秒）...")
@@ -1045,7 +1045,7 @@ class WaveLengthTestGUI(BaseTestGUI):
                 chart_window_title,
                 "图表展开箭头",
                 class_name="TChart",
-                found_index=CFG.wavelength.chart_expand_found_index
+                found_index=CFG.wavelength.chart_arrow_found_index
             )
 
             # 新增：等待 1.5 秒，确保小弹窗完全展开渲染完毕
