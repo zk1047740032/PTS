@@ -175,7 +175,7 @@ class SpectrumSNRParams:
     ref_level_dbm:          float = -4.0
     sensitivity:            str   = "HIGH1"
     main_peak_exclusion_nm: float = 3.0
-    visa_timeout_s:         int   = 120
+    visa_timeout_s:         int   = 300
     screenshot_timeout_ms:  int   = 180000
     query_retries:          int   = 3
     query_retry_delay_s:    float = 0.4

@@ -191,6 +191,11 @@ class SpectrumSNR(VisaInstrument):
             # 设置长一点的超时，比如 180 秒
             self.osa.timeout = CFG.timing.visa_extra_long_ms
 
+            # 0. 再设一下RefLevel
+            ref_level = float(self.params.get("REF_LEVEL", -4.0))
+            # 先发设置命令（根据手册，使用完整的SCPI命令格式，包含Y1轨迹）
+            self.osa.write(f":DISPlay:WINDow:TRACe:Y1:SCALe:RLEVel {ref_level}DBM")
+
             # 1. 在仪器里保存截图到内部存储（BMP 格式）
             self.osa.write(':MMEMory:STORe:GRAPhics COLor,BMP,"spectrum",INT')
             self._opc_wait("保存截图到内部存储")
