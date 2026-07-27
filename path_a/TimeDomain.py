@@ -16,6 +16,7 @@ from core import (
     visa_address,
 )
 from core.config import CFG
+from core.utils import append_row_csv
 
 import time
 import os
@@ -334,6 +335,10 @@ class TimeDomainGUI(BaseTestGUI):
                 vpp = td.read_measurement(":MEAS:VPP?")
                 self.log(f"[结果] {freq}Hz - Vavg = {vavg:.4f} V")
                 self.log(f"[结果] {freq}Hz - Vpp  = {vpp:.4f} V")
+                # 截图前记录 Vpp 到 CSV
+                vpp_csv_path = os.path.join(self.params["OUTPUT_DIR"], CFG.time_domain.vpp_csv_filename)
+                append_row_csv(vpp_csv_path, [freq, vpp], header=["频率(Hz)", "Vpp(V)"])
+                self.log(f"[记录] Vpp 已写入 {vpp_csv_path}")
                 # 保存数据，文件名包含频率信息
                 #td.save_data({"Vavg(V)": vavg, "Vpp(V)": vpp}, filename_base=f"scope_measurement_{freq}Hz")
                 # 保存截图，文件名包含频率信息

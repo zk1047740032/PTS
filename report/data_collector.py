@@ -79,6 +79,36 @@ def _check_single_freq_result():
     return "无"
 
 
+def _get_time_domain_vpp():
+    """
+    从 vpp.csv 读取两个频率的峰峰值并格式化显示。
+
+    文件格式:
+        频率(Hz),Vpp(V)
+        100,0.523
+        300,0.487
+
+    :return: 格式化字符串，如 "0.52V, 0.48V"
+    """
+    vpp_csv = r"C:\PTS\zhongzi\TimeDomain\vpp.csv"
+    if not os.path.exists(vpp_csv):
+        return "(未读取到时域数据)"
+    try:
+        with open(vpp_csv, "r", encoding="utf-8") as f:
+            rows = list(csv.reader(f))
+            results = []
+            for row in rows[1:]:  # 跳过表头
+                if len(row) >= 2:
+                    freq = row[0]
+                    vpp = float(row[1])
+                    results.append(f"{vpp:.2f}V")
+            if not results:
+                return "(未读取到时域数据)"
+            return ", ".join(results)
+    except (OSError, ValueError, IndexError):
+        return "(未读取到时域数据)"
+
+
 def assemble_report_data():
     """
     组装报告模板所需的全部数据。
@@ -156,6 +186,9 @@ def assemble_report_data():
 
         # ---- 单频 ----
         "text_single_freq": _check_single_freq_result(),
+
+        # ---- 时域 ----
+        "text_time_domain": _get_time_domain_vpp(),
 
         # ---- Fig.5 偏振测试 ----
         "img_polarization": "暂无",

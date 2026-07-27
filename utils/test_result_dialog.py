@@ -38,7 +38,7 @@ _FIELDS_MEASURED = [
     ("激光线宽(100us积分)",               "text_linewidth",         False, "kHz"),
     ("光谱信噪比",         "text_SNR",               False, "dB"),
     ("单频",               "text_single_freq",      False, ""),
-    ("时域",               None,                     False, ""),
+    ("时域",               "text_time_domain",       False, ""),
 ]
 
 _PLACEHOLDER = "—"

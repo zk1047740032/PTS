@@ -266,6 +266,7 @@ class TimeDomainParams:
     signal_stabilize_s:     float = 3.0
     gen_settle_s:           float = 1.5
     invalid_sentinels:      Tuple[str, ...] = ("9.91E+37", "NAN")
+    vpp_csv_filename:       str   = "vpp.csv"
 
 
 # ========================== PZT / 波长调制参数 ===============================
