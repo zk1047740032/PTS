@@ -31,14 +31,15 @@ _FIELDS_EDITABLE = [
 ]
 
 _FIELDS_MEASURED = [
-    ("激光器输出功率",           "text_power",             False, "mW"),
+    ("激光器输出功率",      "text_power",             False, "mW"),
     ("当前工作波长",       "text_center_wavelength", False, "nm"),
-    ("快速频率调谐范围",   "text_PZT_range",         False, "nm"),
-    ("相对强度噪声(RIN)",                "text_rin",               False, "dBc/Hz"),
-    ("激光线宽(100us积分)",               "text_linewidth",         False, "kHz"),
+    ("快速频率调谐范围",   "text_PZT_range",         False, "GHz"),
+    ("相对强度噪声(RIN)",  "text_rin",               False, "dBc/Hz"),
+    ("激光线宽(100us积分)", "text_linewidth",         False, "kHz"),
     ("光谱信噪比",         "text_SNR",               False, "dB"),
     ("单频",               "text_single_freq",      False, ""),
-    ("时域",               "text_time_domain",       False, ""),
+    ("时域(100Hz)",        "text_time_domain1",       False, "mV"),
+    ("时域(300Hz)",        "text_time_domain2",       False, "mV"),
 ]
 
 _PLACEHOLDER = "—"

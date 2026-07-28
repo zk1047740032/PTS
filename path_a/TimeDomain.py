@@ -16,7 +16,7 @@ from core import (
     visa_address,
 )
 from core.config import CFG
-from core.utils import append_row_csv
+from core.utils import append_row_csv, clear_directory
 
 import time
 import os
@@ -316,6 +316,12 @@ class TimeDomainGUI(BaseTestGUI):
         """后台线程执行的测试逻辑。"""
         td = TimeDomain(self.params, self.log)
         try:
+            # 清空输出文件夹
+            out_dir = str(self.params["OUTPUT_DIR"])
+            self.log(f"[测试] 正在清空输出文件夹: {out_dir}")
+            clear_directory(out_dir, log_func=self.log)
+            self.log("[测试] 输出文件夹清空完成")
+
             td.connect_instruments()
             # 保存原始频率参数
             original_freq = self.params["GEN_FREQ"]
@@ -330,6 +336,9 @@ class TimeDomainGUI(BaseTestGUI):
                 td.configure_gen()
                 # 再配置示波器（根据频率设置时基）
                 td.configure_scope(freq)
+                # 暂停波形刷新，确保 Vpp 读数与截图一致
+                td.scope.write(":STOP")
+                time.sleep(1.5)
                 # 读取测量结果
                 vavg = td.read_measurement(":MEAS:VAVG?")
                 vpp = td.read_measurement(":MEAS:VPP?")
@@ -337,7 +346,7 @@ class TimeDomainGUI(BaseTestGUI):
                 self.log(f"[结果] {freq}Hz - Vpp  = {vpp:.4f} V")
                 # 截图前记录 Vpp 到 CSV
                 vpp_csv_path = os.path.join(self.params["OUTPUT_DIR"], CFG.time_domain.vpp_csv_filename)
-                append_row_csv(vpp_csv_path, [freq, vpp], header=["频率(Hz)", "Vpp(V)"])
+                append_row_csv(vpp_csv_path, [freq, vpp * 1000], header=["频率(Hz)", "Vpp(mV)"])
                 self.log(f"[记录] Vpp 已写入 {vpp_csv_path}")
                 # 保存数据，文件名包含频率信息
                 #td.save_data({"Vavg(V)": vavg, "Vpp(V)": vpp}, filename_base=f"scope_measurement_{freq}Hz")
@@ -345,6 +354,7 @@ class TimeDomainGUI(BaseTestGUI):
                 screenshot = td.save_screenshot(filename=f"scope_screenshot_{freq}Hz.png")
                 # 显示截图
                 #self.show_image_popup(screenshot)
+                #td.scope.write(":STOP")
 
             # 恢复原始频率参数
             self.params["GEN_FREQ"] = original_freq

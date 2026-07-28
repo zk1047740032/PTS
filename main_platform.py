@@ -36,8 +36,8 @@ from core.config import CFG
 _BASE_WINDOW_W      = 666   # 主窗口宽度
 _BASE_WINDOW_H      = 400    # 主窗口高度
 _BASE_LEFT_PANEL_W  = 275    # 左侧控制面板宽度
-_BASE_RESULT_W      = 370    # 测试结果弹窗宽度
-_BASE_RESULT_H      = 410    # 测试结果弹窗高度
+_BASE_RESULT_W      = 300    # 测试结果弹窗宽度
+_BASE_RESULT_H      = 430    # 测试结果弹窗高度
 _BASE_HELP_W        = 650   # 说明文档窗口宽度
 _BASE_HELP_H        = 480    # 说明文档窗口高度
 _BASE_SEED_W        = 330    # 种子参数窗口宽度
