@@ -24,3 +24,16 @@ dist/
 *.db
 *.sqlite
 *.sqlite3
+
+# Node.js / 前端
+node_modules/
+web/frontend/dist/
+
+# 本地数据
+data/
+
+# Claude Code
+.claude/
+
+# 日志文件
+*.log

@@ -1,0 +1,83 @@
+/* PTS Web 全局样式 */
+
+:root {
+  --color-bg: #F5F7FA;
+  --color-card: #FFFFFF;
+  --color-accent: #2B6FF2;
+  --color-success: #38A169;
+  --color-warning: #F2994A;
+  --color-danger: #E53E3E;
+  --color-text: #2D3748;
+  --color-text-secondary: #718096;
+  --color-border: #E2E8F0;
+  --font-family: '微软雅黑', 'Microsoft YaHei', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: var(--font-family);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* Element Plus 主题覆盖 */
+:root {
+  --el-color-primary: var(--color-accent);
+  --el-color-success: var(--color-success);
+  --el-color-warning: var(--color-warning);
+  --el-color-danger: var(--color-danger);
+  --el-font-family: var(--font-family);
+}
+
+/* 滚动条 */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #CBD5E0;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #A0AEC0;
+}
+
+/* Dashboard layout helper */
+.page-container {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.page-header {
+  padding: 12px 20px;
+  background: var(--color-card);
+  border-bottom: 1px solid var(--color-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+
+.page-body {
+  flex: 1;
+  overflow: auto;
+  padding: 16px;
+}
+
+/* 日志级别颜色 */
+.log-info { color: var(--color-text); }
+.log-warning { color: var(--color-warning); }
+.log-error { color: var(--color-danger); }
+.log-completed { color: var(--color-success); }
+.log-running { color: var(--color-accent); }
