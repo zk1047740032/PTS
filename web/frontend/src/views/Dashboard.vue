@@ -19,7 +19,36 @@ import TestResultDialog from '@/components/TestResultDialog.vue'
 const router = useRouter()
 
 // WebSocket
-const { connected, logEntries } = useWebSocket()
+const { connected, logEntries, messages } = useWebSocket()
+
+// Agent 状态
+interface AgentInfo {
+  agent_id: string
+  hostname: string
+  modules: string[]
+  online: boolean
+}
+const agents = ref<AgentInfo[]>([])
+
+// 监听 Agent 上/下线消息
+import { watch } from 'vue'
+watch(() => messages.value.length, () => {
+  const latest = messages.value[messages.value.length - 1]
+  if (!latest) return
+  if (latest.type === 'agent_online') {
+    loadAgents()
+  } else if (latest.type === 'agent_offline') {
+    loadAgents()
+  }
+})
+
+async function loadAgents() {
+  try {
+    const res = await fetch('/api/rin/agents')
+    const data = await res.json()
+    agents.value = data.agents
+  } catch {}
+}
 
 // State
 const modules = ref<ModuleInfo[]>([])
@@ -164,6 +193,7 @@ function showResults() {
 
 onMounted(() => {
   loadModules()
+  loadAgents()
 })
 </script>
 
@@ -270,6 +300,29 @@ onMounted(() => {
         <!-- Instrument Status -->
         <div class="bottom-row">
           <InstrumentStatus />
+
+          <!-- Agent 状态 -->
+          <div class="agent-status card">
+            <div class="card-header">
+              <span>仪器 Agent</span>
+              <el-tag :type="agents.length > 0 ? 'success' : 'info'" size="small">
+                {{ agents.length }} 在线
+              </el-tag>
+            </div>
+            <div class="agent-list" v-if="agents.length > 0">
+              <div v-for="a in agents" :key="a.agent_id" class="agent-row">
+                <el-icon color="#38A169"><CircleCheckFilled /></el-icon>
+                <span class="agent-name">{{ a.agent_id }}</span>
+                <span class="agent-host">{{ a.hostname }}</span>
+                <el-tag v-for="m in a.modules" :key="m" size="small" type="success" effect="plain">
+                  {{ m }}
+                </el-tag>
+              </div>
+            </div>
+            <div v-else class="agent-empty">
+              <span>无 Agent 连接 — 测试将在本机执行</span>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -340,6 +393,44 @@ onMounted(() => {
 
 .bottom-row {
   flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Agent status */
+.agent-status.card {
+  background: var(--color-card);
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  padding: 12px;
+}
+.agent-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+}
+.agent-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+.agent-name {
+  font-weight: 600;
+  color: var(--color-text);
+}
+.agent-host {
+  color: var(--color-text-secondary);
+  font-family: monospace;
+}
+.agent-empty {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  text-align: center;
+  padding: 8px;
 }
 
 .header-left {

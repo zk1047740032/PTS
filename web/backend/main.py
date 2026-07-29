@@ -55,8 +55,10 @@ app.include_router(rin_router)
 
 # ========== WebSocket 路由 ==========
 from .ws.test_log import router as ws_router
+from .ws.agent import router as agent_ws_router
 
 app.include_router(ws_router)
+app.include_router(agent_ws_router)
 
 
 # ========== 健康检查 ==========
