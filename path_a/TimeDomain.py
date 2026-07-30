@@ -210,6 +210,11 @@ class TimeDomain(VisaInstrument):
         # 基类关闭：scope (self.inst) + rm
         super().close()
 
+    def setCurAc(self):
+        """设置电流耦合方式为直流，测试结束后调用"""
+        ch = self.params["SCOPE_CH"]
+        self.scope.write(f":{ch}:COUP DC")
+        self.log(f"[示波器] 电流耦合方式改为直流")
 
 # ============ GUI 类 ============
 class TimeDomainGUI(BaseTestGUI):
@@ -359,6 +364,7 @@ class TimeDomainGUI(BaseTestGUI):
             # 恢复原始频率参数
             self.params["GEN_FREQ"] = original_freq
             self.log("\n[测试] 所有频率测试完成")
+            td.setCurAc()
         except Exception as e:
             self.log(f"[错误] 测试失败：{e}")
         finally:
