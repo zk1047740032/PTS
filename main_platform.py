@@ -59,6 +59,8 @@ MODULE_REGISTRY = {
     "功率":           ("path_b.Power",           "PowerGUI"),
     "PZT调制":        ("path_a.WaveLength",      "WaveLengthTestGUI"),
     "相噪":           ("path_a.PhaseNoise",      "PhaseNoiseGUI"),
+    "底噪(一键测试)":           ("path_a.Rin_FSV3004",    "RinGUI"),
+    "种子光(一键测试)":         ("path_a.Rin_FSV3004",    "RinGUI"),
 }
 
 # 【修改点 1】：函数签名增加 cmd_queue (命令队列)
@@ -198,9 +200,11 @@ MODULE_MAP = {
     "时域": {"start_method": "start_test", "group": "ch2"},
     "信噪比": {"start_method": "start_test", "group": "ch3"},
     "单频": {"start_method": "start", "group": "ch3"},
+    "种子光(一键测试)": {"start_method": "start_seedlight", "group": "ch3"},
     "功率": {"start_method": "start_collect", "group": "path_b"},
     "PZT调制": {"start_method": "start_test", "group": "ch1"},
     "相噪": {"start_method": "start_test", "group": "ch4"},
+    "底噪(一键测试)": {"start_method": "start_background", "group": "ch4"},
 }
 
 MODULE_GROUPS = {
@@ -1017,7 +1021,12 @@ class IntegratedPlatform:
 
         for group_key in ["ch1", "ch2", "ch3", "ch4"]:
             modules = channel_groups.get(group_key, [])
-            if not modules:
+            # 通道3：种子光(一键测试)须在 RIN 完成后串行执行（共用同一台仪器）
+            deferred_modules = []
+            if group_key == "ch3":
+                deferred_modules = [m for m in modules if m == "种子光(一键测试)"]
+                modules = [m for m in modules if m != "种子光(一键测试)"]
+            if not modules and not deferred_modules:
                 continue
 
             channel_num = channel_map[group_key]
@@ -1033,7 +1042,7 @@ class IntegratedPlatform:
 
             time.sleep(CHANNEL_SWITCH_DELAY)
 
-            # 2. 并行启动该通道所有模块
+            # 2. 并行启动该通道所有模块（不含延迟模块）
             for name in modules:
                 try:
                     if name in self.processes and self.processes[name].is_alive():
@@ -1051,7 +1060,27 @@ class IntegratedPlatform:
                 time.sleep(0.1)
 
             # 3. 等待该通道所有模块完成
-            self._wait_for_modules(modules)
+            if modules:
+                self._wait_for_modules(modules)
+
+            # 4. 串行执行延迟模块（通道3：种子光(一键测试)在 RIN 之后）
+            for name in deferred_modules:
+                self.log("SYSTEM", f"--- 开始 {name} ---", "running")
+                try:
+                    if name in self.processes and self.processes[name].is_alive():
+                        if name in self.cmd_queues:
+                            self.cmd_queues[name].put("START")
+                            self.log(name, "窗口已存在，发送【开始测试】指令", "running")
+                        else:
+                            self.log(name, "错误：找不到命令队列，尝试重启进程", "error")
+                            self.processes[name].terminate()
+                            self.start_module_process(name, auto_start=True)
+                    else:
+                        self.start_module_process(name, auto_start=True)
+                except Exception as e:
+                    self.log(name, f"启动失败: {e}", "error")
+                self._wait_for_modules([name])
+
             self.log("SYSTEM", f"========== 通道 {channel_num} 测试完成 ==========", "completed")
 
         # 等待光路B模块（在 run_selected_tests 中已先行启动）
