@@ -19,7 +19,7 @@ import ctypes
 from pywinauto import Desktop
 
 from drivers import wlmData
-from core import VisaInstrument, BaseTestGUI, visa_address
+from core import VisaInstrument, BaseTestGUI, visa_address, clear_directory
 from core.config import CFG
 
 # ===============  上位机控制（pywinauto）  ===============
@@ -407,6 +407,14 @@ class WaveLengthTestGUI(BaseTestGUI):
         self.wavemeter: Optional[WavemeterController] = None
 
         self._build_ui()
+
+        # 独立窗口模式：居中显示
+        if parent is None:
+            sw = self.root.winfo_screenwidth()
+            sh = self.root.winfo_screenheight()
+            x = (sw - 1200) // 2
+            y = (sh - 820) // 2
+            self.root.geometry(f"1200x820+{x}+{y}")
 
     def _build_ui(self) -> None:
         """
@@ -888,6 +896,10 @@ class WaveLengthTestGUI(BaseTestGUI):
             self.log("=" * 30)
             self.log("[开始] 波长测量与PZT调制测试")
             self.log("=" * 30)
+            
+            output_dir = self.params['输出目录']
+            clear_directory(output_dir, log_func=self.log)
+            self.log(f"[文件] 已清空输出目录: {output_dir}")
 
             self.signal_gen = SignalGenerator(log_callback=self.log)
             self.wavemeter = WavemeterController(log_callback=self.log)
@@ -905,7 +917,6 @@ class WaveLengthTestGUI(BaseTestGUI):
             if not self.signal_gen.connect(sg_ip):
                 raise Exception("连接信号源失败")
 
-            output_dir = self.params['输出目录']
             if not os.path.exists(output_dir):
                 try:
                     os.makedirs(output_dir)

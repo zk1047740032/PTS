@@ -696,6 +696,15 @@ class SingleFrequencyGUI(BaseTestGUI):
         self.test_type_var = tk.StringVar(value="1μm")
 
         self._build_ui()
+
+        # 独立窗口模式：居中显示
+        if parent is None:
+            sw = self.root.winfo_screenwidth()
+            sh = self.root.winfo_screenheight()
+            x = (sw - 1320) // 2
+            y = (sh - 950) // 2
+            self.root.geometry(f"1320x950+{x}+{y}")
+
         self.pause_flag = threading.Event()
 
         # 统计计数器

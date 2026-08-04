@@ -8,6 +8,8 @@ a = Analysis(['main_platform.py'],
              datas=[
     ('PreciLasers.ico', '.'),
     ('report/templates/template_default.docx', 'report/templates'),
+    ('docs/一键测试操作说明.md', 'docs'),
+    ('help_images', 'help_images'),
 ],
              hiddenimports=[
         # 仪器/UI 底层依赖

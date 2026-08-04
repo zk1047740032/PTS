@@ -393,22 +393,39 @@ class SeedParamsPanel:
         self.status_label.config(text='● 查询中...', fg='#F2994A')
         self.error_label.config(text='')
 
+        completed = threading.Event()  # 防止超时回调与工作线程竞态
+
         def do():
             try:
-                # 打开串口 → 系统信息 → 实时参数 → 关闭串口
+                # 打开串口 → 系统信息 → 实时参数 → 关闭串口（各环节超时收紧，合计约 2.5s）
                 laser = DFBLaserController(port, addr, log_func=lambda msg: None)
-                laser.open(timeout_s=1.0)
-                sys_info = laser.query_system_info(timeout=1.5)
-                realtime = laser.query_realtime(timeout=1.5)
+                laser.open(timeout_s=0.5)
+                sys_info = laser.query_system_info(timeout=1.0)
+                realtime = laser.query_realtime(timeout=1.0)
                 laser.close()
 
-                self.parent.after(0, self._on_query_success, sys_info, realtime)
+                if not completed.is_set():
+                    self.parent.after(0, self._on_query_success, sys_info, realtime)
             except Exception as e:
-                self.parent.after(0, self._on_query_failed, str(e))
+                if not completed.is_set():
+                    self.parent.after(0, self._on_query_failed, str(e))
             finally:
+                if not completed.is_set():
+                    completed.set()
+                    self.parent.after(0, self._on_query_done)
+
+        def run_with_timeout():
+            """看门狗线程：join 工作线程最多 3 秒，超时则强制报失败"""
+            worker = threading.Thread(target=do)
+            worker.start()
+            worker.join(timeout=3.0)
+            if not completed.is_set():
+                # 3 秒已过，工作线程仍卡在串口操作中 → 强制失败
+                completed.set()
+                self.parent.after(0, self._on_query_failed, '查询超时（3秒）')
                 self.parent.after(0, self._on_query_done)
 
-        threading.Thread(target=do, daemon=True).start()
+        threading.Thread(target=run_with_timeout, daemon=True).start()
 
     def _on_query_success(self, sys_info: dict | None, realtime: dict | None):
         """查询成功，更新系统信息和实时参数"""

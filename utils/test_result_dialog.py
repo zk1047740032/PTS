@@ -31,15 +31,15 @@ _FIELDS_EDITABLE = [
 ]
 
 _FIELDS_MEASURED = [
-    ("激光器输出功率",      "text_power",             False, "mW"),
-    ("当前工作波长",       "text_center_wavelength", False, "nm"),
-    ("快速频率调谐范围",   "text_PZT_range",         False, "GHz"),
-    ("相对强度噪声(RIN)",  "text_rin",               False, "dBc/Hz"),
-    ("激光线宽(100us积分)", "text_linewidth",         False, "kHz"),
-    ("光谱信噪比",         "text_SNR",               False, "dB"),
-    ("单频",               "text_single_freq",      False, ""),
-    ("时域(100Hz)",        "text_time_domain1",       False, "mV"),
-    ("时域(300Hz)",        "text_time_domain2",       False, "mV"),
+    ("激光器输出功率",      "text_power",             False, "mW",      2),
+    ("当前工作波长",       "text_center_wavelength", False, "nm",      2),
+    ("快速频率调谐范围",   "text_PZT_range",         False, "GHz",     2),
+    ("相对强度噪声(RIN)",  "text_rin",               False, "dBc/Hz", 3),
+    ("激光线宽(100us积分)", "text_linewidth",         False, "kHz",     2),
+    ("光谱信噪比",         "text_SNR",               False, "dB",      2),
+    ("单频",               "text_single_freq",      False, "",         2),
+    ("时域(100Hz)",        "text_time_domain1",       False, "mV",      2),
+    ("时域(300Hz)",        "text_time_domain2",       False, "mV",      2),
 ]
 
 _PLACEHOLDER = "—"
@@ -191,14 +191,15 @@ class TestResultDialog:
         inner = tk.Frame(card, bg=COLOR_CARD_BG)
         inner.pack(fill=tk.X, padx=14, pady=(8, 10))
 
-        for i, (label_text, data_key, editable, unit) in enumerate(fields):
-            self._create_field_row(inner, i, label_text, data_key, editable, unit)
+        for i, (label_text, data_key, editable, unit, *rest) in enumerate(fields):
+            decimal_places = rest[0] if rest else 2
+            self._create_field_row(inner, i, label_text, data_key, editable, unit, decimal_places)
 
         inner.grid_columnconfigure(1, weight=1)
 
     def _create_field_row(self, parent: tk.Frame, row_idx: int,
                           label_text: str, data_key: Optional[str],
-                          editable: bool, unit: str):
+                          editable: bool, unit: str, decimal_places: int = 2):
         """在给定父容器中创建一行字段
 
         Args:
@@ -227,7 +228,7 @@ class TestResultDialog:
         if editable:
             self._build_editable_field(row_frame, label_text)
         else:
-            self._build_readonly_field(row_frame, data_key, unit, row_bg)
+            self._build_readonly_field(row_frame, data_key, unit, row_bg, decimal_places)
 
     def _build_editable_field(self, parent: tk.Frame, label_text: str):
         """创建可编辑输入框（带边框包装）"""
@@ -245,7 +246,7 @@ class TestResultDialog:
         self._entries[label_text] = entry
 
     def _build_readonly_field(self, parent: tk.Frame, data_key: Optional[str],
-                              unit: str, row_bg: str):
+                              unit: str, row_bg: str, decimal_places: int = 2):
         """创建只读显示字段"""
         raw = self._report_data.get(data_key) if data_key else None
         has_data = raw is not None and raw != "" and not str(raw).startswith("(未读取")
@@ -253,7 +254,7 @@ class TestResultDialog:
         if has_data:
             # 格式化数值
             if isinstance(raw, float):
-                value_text = f"{raw:.2f}"
+                value_text = f"{raw:.{decimal_places}f}"
             else:
                 value_text = str(raw)
 
@@ -324,14 +325,15 @@ class TestResultDialog:
         """
         all_fields = _FIELDS_EDITABLE + _FIELDS_MEASURED
         result = {}
-        for label_text, data_key, editable, *_ in all_fields:
+        for label_text, data_key, editable, *rest in all_fields:
+            decimal_places = rest[1] if len(rest) > 1 else 2  # rest = (unit, decimal_places) or (unit,)
             if editable:
                 entry = self._entries.get(label_text)
                 result[label_text] = entry.get() if entry else ""
             else:
                 raw = self._report_data.get(data_key) if data_key else None
                 if raw is not None and raw != "" and not str(raw).startswith("(未读取"):
-                    result[label_text] = f"{raw:.2f}" if isinstance(raw, float) else str(raw)
+                    result[label_text] = f"{raw:.{decimal_places}f}" if isinstance(raw, float) else str(raw)
                 else:
                     result[label_text] = ""
         return result

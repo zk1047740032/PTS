@@ -91,6 +91,14 @@ class PhaseNoiseGUI(BaseTestGUI):
 
         self._build_ui()
 
+        # 独立窗口模式：居中显示
+        if parent is None:
+            sw = self.root.winfo_screenwidth()
+            sh = self.root.winfo_screenheight()
+            x = (sw - 1140) // 2
+            y = (sh - 420) // 2
+            self.root.geometry(f"1140x420+{x}+{y}")
+
     def _build_ui(self) -> None:
         """
         构建GUI界面布局

@@ -38,8 +38,8 @@ _BASE_WINDOW_H      = 400    # 主窗口高度
 _BASE_LEFT_PANEL_W  = 275    # 左侧控制面板宽度
 _BASE_RESULT_W      = 300    # 测试结果弹窗宽度
 _BASE_RESULT_H      = 430    # 测试结果弹窗高度
-_BASE_HELP_W        = 650   # 说明文档窗口宽度
-_BASE_HELP_H        = 480    # 说明文档窗口高度
+_BASE_HELP_W        = 666   # 操作说明窗口宽度
+_BASE_HELP_H        = 620    # 操作说明窗口高度
 _BASE_SEED_W        = 330    # 种子参数窗口宽度
 _BASE_SEED_H        = 540    # 种子参数窗口高度
 _BASE_CONFIG_W      = 585    # 配置参数窗口宽度
@@ -514,7 +514,7 @@ class IntegratedPlatform:
         self.btn_network = self._make_secondary_button(btn_group, "网络配置", self.show_network_config)
         self.btn_network.pack(side=tk.LEFT, padx=(0, 4))
 
-        self.btn_help = self._make_secondary_button(btn_group, "说明文档", self.show_help)
+        self.btn_help = self._make_secondary_button(btn_group, "操作说明", self.show_help)
         self.btn_help.pack(side=tk.LEFT, padx=(4, 0))
 
         # ---- 日志卡片 ----
@@ -698,18 +698,18 @@ class IntegratedPlatform:
 
     def show_help(self):
         """
-        显示操作说明文档
+        显示操作操作说明
 
         功能:
-            - 创建一个新的窗口显示操作说明文档
+            - 创建一个新的窗口显示操作操作说明
             - 从 user_guide 模块导入 USER_GUIDE 内容并显示
             - 提供滚动条和关闭按钮
         """
-        from utils.user_guide import USER_GUIDE
+        from utils.user_guide import render_markdown
 
         help_window = tk.Toplevel(self.root)
         help_window.title("操作说明")
-        help_window.geometry(f"{dpix(_BASE_HELP_W)}x{dpix(_BASE_HELP_H)}")
+        help_window.geometry(f"{dpix(_BASE_HELP_W)}x{dpix(_BASE_HELP_H + 100)}")
         help_window.resizable(True, True)
         help_window.configure(bg=COLOR_BG)
         help_window.transient(self.root)
@@ -731,7 +731,7 @@ class IntegratedPlatform:
                  font=(FONT_FAMILY, FONT_SIZE_HEADING, "bold"),
                  fg=COLOR_TEXT_PRIMARY, bg=COLOR_BG).pack(side=tk.LEFT)
 
-        tk.Label(header, text="PTS 频准测试系统使用指南",
+        tk.Label(header, text="测试系统使用指南",
                  font=(FONT_FAMILY, FONT_SIZE_CAPTION),
                  fg=COLOR_TEXT_MUTED, bg=COLOR_BG).pack(side=tk.LEFT, padx=(14, 0), pady=(6, 0))
 
@@ -748,7 +748,7 @@ class IntegratedPlatform:
         scrollbar = ttk.Scrollbar(inner)
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 
-        help_text = tk.Text(inner, wrap=tk.WORD, yscrollcommand=scrollbar.set,
+        help_text = tk.Text(inner, wrap=tk.CHAR, yscrollcommand=scrollbar.set,
                            font=(FONT_FAMILY, FONT_SIZE_BODY),
                            bg=COLOR_CARD_BG, fg=COLOR_TEXT_PRIMARY,
                            relief="flat", bd=0, highlightthickness=0,
@@ -759,8 +759,7 @@ class IntegratedPlatform:
         help_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         scrollbar.config(command=help_text.yview)
 
-        help_text.insert(tk.END, USER_GUIDE)
-        help_text.config(state=tk.DISABLED)
+        render_markdown(help_text, "docs/一键测试操作说明.md")
 
         # ---- 底部按钮栏 ----
         bottom = tk.Frame(help_window, bg=COLOR_BG)
@@ -1063,6 +1062,13 @@ class IntegratedPlatform:
         # 全部完成，恢复按钮
         self.root.after(0, lambda: self.btn_run.config(state="normal", text="一键测试"))
         self.log("SYSTEM", "所有通道测试完成", "completed")
+
+        # 光开关回到1通道
+        try:
+            self.optical_switch.set_channel(1)
+            self.log("光开关", "已回到通道 1")
+        except Exception as e:
+            self.log("光开关", f"回到通道 1 失败: {e}", "error")
 
         # 弹出测试结果窗口
         self.root.after(0, lambda: TestResultDialog.show(

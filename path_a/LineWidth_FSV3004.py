@@ -458,6 +458,10 @@ class LineWidth_FSV3004_GUI(BaseTestGUI):
         # 构建UI
         self._build_ui()
 
+        # 独立窗口模式：居中显示
+        if parent is None:
+            self.set_center(self.root, 1150, 550)
+
     def set_center(self, window, width, height):
         """
         将指定窗口在屏幕上居中显示。

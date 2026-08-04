@@ -1,61 +1,394 @@
-# 频准测试系统帮助文档
-USER_GUIDE = """
-    频准测试系统 (PTS)
+"""
+频准测试系统 — 帮助文档渲染
 
-    欢迎使用一体化测试系统。下面提供一些基础操作说明，帮助你在使用过程中正确连接仪器并运行测试。
+从 Markdown 文件渲染到 tk.Text 控件。
+支持: ##/### 标题、**粗体**、列表层级、图片嵌入。
+"""
 
-    一、连接配置
+import os
+import re
+import sys
+import tkinter as tk
+from PIL import Image, ImageTk
 
-        1.已在主机上安装并配置好 VISA 后端（搜索框输入"NI"，出现"NI MAX"，则配置成功）。
+from utils.theme import (
+    COLOR_BG, COLOR_CARD_BG,
+    COLOR_TEXT_PRIMARY, COLOR_TEXT_SECONDARY, COLOR_TEXT_MUTED,
+    COLOR_ACCENT, COLOR_ENTRY_BORDER,
+    FONT_FAMILY, FONT_SIZE_HEADING, FONT_SIZE_BODY, FONT_SIZE_SMALL, FONT_SIZE_CAPTION,
+)
 
-        2.仪器开启远程控制功能，有些仪器需设置控制方式，如YOKOGAWA光谱仪需设置为NET(VXI-11)。
+# ==================== 路径 ====================
 
-        3.配置好仪器IP；主机IP地址设为静态IP，且与仪器处于同一网段。
-            主机：IP地址-192.168.7.7，子网掩码-255.255.255.0，网关-192.168.7.1，首选DNS-1.1.1.1。
-            仪器：IP地址-对应程序默认地址，其余同上。
-            PS：主机若控制两台仪器，第二个IP地址设置为192.168.7.8，其余同上。
+# PyInstaller 打包后 __file__ 指向临时目录，需用 sys._MEIPASS
+if getattr(sys, "frozen", False):
+    _PROJECT_DIR = sys._MEIPASS
+else:
+    _PROJECT_DIR = os.path.dirname(os.path.dirname(__file__))
+HELP_IMAGES_DIR = os.path.join(_PROJECT_DIR, "help_images")
 
-        4.将主机与仪器通过网线连接。
+# ==================== 正则 ====================
 
-    二、使用方式
+_IMG_RE   = re.compile(r'^\s*!\[.*?\]\((.+?)\)\s*$')   # ![alt](path)
+_H2_RE    = re.compile(r'^## (.+)$')                      # ## 标题
+_H3_RE    = re.compile(r'^### (.+)$')                     # ### 子标题
+_BULLET_RE = re.compile(r'^(\s*)- (.+)$')                # - /   - 列表
+_BOLD_RE  = re.compile(r'\*\*(.+?)\*\*')                  # **粗体**
 
-        1. 网盘 "\\\\192.168.110.5\\\\信息部\\\\PTS\\\\集成软件" 中可找到最新软件，复制到本地即可。
+# ==================== 主渲染函数 ====================
 
-        2. 测试项选择：
-            - 单击测试项前的复选框可勾选/取消勾选
-            - 双击测试项可直接打开对应测试窗口
 
-        3. 窗口操作：
-            - 勾选测试项后，点击"打开"按钮可打开所有已勾选测试项的窗口
-            - 点击"一键测试"按钮可打开所有已勾选测试项的窗口并自动开始测试
-            - 取消勾选测试项将关闭对应的窗口
-            - 可通过“清空”按钮关闭所有已打开的窗口
+def render_markdown(text_widget, md_filename):
+    """解析 Markdown 文件并渲染到 tk.Text 控件。
 
-        4. 日志监控：
-            - 右侧日志区域显示各测试项的运行状态
-            - 点击"清空日志"按钮可清空所有日志记录
-            - 不同状态日志以不同颜色显示：
-                • 运行中：蓝色
-                • 完成：深绿色
-                • 错误：红色
+    Args:
+        text_widget: tk.Text 控件实例
+        md_filename: Markdown 文件名（相对于项目根目录）
+    """
+    md_path = os.path.join(_PROJECT_DIR, md_filename)
+    if not os.path.exists(md_path):
+        text_widget.config(state="normal")
+        text_widget.delete("1.0", "end")
+        text_widget.insert("end", f"[文档未找到: {md_path}]", "body")
+        text_widget.config(state="disabled")
+        return
 
-        5. 窗口管理：
-            - 关闭测试窗口将自动取消对应的勾选状态
-            - 窗口标题会显示当前测试状态
+    with open(md_path, "r", encoding="utf-8") as f:
+        lines = f.readlines()
 
-    三、数据保存
+    _setup_tags(text_widget)
+    _setup_image_holder(text_widget)
+    _setup_pixel_scroll(text_widget)
 
-        1.测试数据默认保存到模块配置中指定的输出目录（可以在模块参数中修改）。
+    # 强制布局计算，确保后续能拿到正确的控件宽度
+    text_widget.update_idletasks()
 
-        2.程序会保存 CSV/DAT 等格式的数据文件，并生成可视化图片供保存。
+    text_widget.config(state="normal")
+    text_widget.delete("1.0", "end")
 
-    四、故障排查
+    for line in lines:
+        stripped = line.rstrip()
 
-        1.无法连接仪器：检查 IP 是否可达（ping）、VISA 是否安装、仪器远程控制方式是否正确。
+        # 空行
+        if not stripped:
+            text_widget.insert("end", "\n", "body")
+            continue
 
-        2.二进制读取失败：程序会回退到 ASCII 读取并在日志中提示，若频繁失败请检查仪器固件和命令兼容性。
+        # 图片
+        m = _IMG_RE.match(stripped)
+        if m:
+            raw_path = m.group(1).strip().replace("\\", "/")
+            if raw_path.startswith("help_images/"):
+                img_abs = os.path.join(HELP_IMAGES_DIR, raw_path.split("help_images/", 1)[1])
+            else:
+                img_abs = os.path.join(_PROJECT_DIR, raw_path)
+            _render_md_image(text_widget, img_abs)
+            continue
 
-        3.GUI 无响应：可能是长时间测量或阻塞的查询，可尝试停止后重新连接。
+        # h2 标题
+        m = _H2_RE.match(stripped)
+        if m:
+            _insert_h2(text_widget, m.group(1))
+            continue
+
+        # h3 子标题
+        m = _H3_RE.match(stripped)
+        if m:
+            _insert_h3(text_widget, m.group(1))
+            continue
+
+        # 列表项
+        m = _BULLET_RE.match(stripped)
+        if m:
+            indent = len(m.group(1))
+            level = indent // 2
+            _insert_bullet(text_widget, level, m.group(2))
+            continue
+
+        # 普通正文
+        _insert_rich_line(text_widget, stripped, "body")
+
+    text_widget.config(state="disabled")
+
+
+# ==================== 行内富文本 ====================
+
+
+def _insert_rich_line(text_widget, text, base_tag):
+    """插入一行文本，解析 **粗体** 并分段打标签。"""
+    parts = _BOLD_RE.split(text)  # 交替: [普通, 粗体内容, 普通, ...]
+    for i, part in enumerate(parts):
+        if not part:
+            continue
+        tag = "bold" if i % 2 == 1 else base_tag
+        text_widget.insert("end", part, (base_tag, tag))
+    text_widget.insert("end", "\n", base_tag)
+
+
+# ==================== 各元素渲染 ====================
+
+
+def _insert_h2(text_widget, text):
+    """渲染 h2 标题：蓝色竖线 + 蓝色加粗文字。"""
+    # 段前间距
+    text_widget.insert("end", "\n", "spacer")
+    # 蓝色竖线
+    text_widget.insert("end", "  │  ", "h2_bar")
+    # 标题文字（带粗体解析）
+    _insert_rich_line(text_widget, text, "h2")
+    # 下方细线
+    text_widget.insert("end", "  " + "─" * 52 + "\n", "h2_rule")
+
+
+def _insert_h3(text_widget, text):
+    """渲染 h3 子标题：深色加粗 + 上间距。"""
+    text_widget.insert("end", "\n", "spacer")
+    _insert_rich_line(text_widget, text, "h3")
+
+
+def _insert_bullet(text_widget, level, text):
+    """渲染列表项，根据层级选标记和标签。"""
+    if level == 0:
+        marker, tag = "●", "bullet_l1"
+    elif level == 1:
+        marker, tag = "◦", "bullet_l2"
+    elif level == 2:
+        marker, tag = "▪", "bullet_l3"
+    else:
+        marker, tag = "▸", "bullet_l4"
+
+    # 标记与正文同在一行（无 \\n 分隔），保证换行时不断开
+    text_widget.insert("end", f"{marker}  ", (tag, "bullet_marker"))
+    _insert_rich_line(text_widget, text, tag)
+
+
+# ==================== 图片渲染 ====================
+
+
+def _forward_scroll(event):
+    """像素级滚轮滚动（避免嵌入图片时按行滚动造成大幅跳位）。"""
+    w = event.widget
+    while w is not None:
+        if isinstance(w, tk.Text):
+            # 每 notch 滚动约 50px，相当于 ~3 行文字
+            pixels = int(-1 * (event.delta / 120) * 50)
+            w.yview_scroll(pixels, "pixels")
+            return
+        w = w.master
+
+
+def _bind_scroll(widget):
+    """为控件绑定滚轮事件转发到父级 Text。"""
+    widget.bind("<MouseWheel>", _forward_scroll, add="+")
+
+
+def _setup_pixel_scroll(text_widget):
+    """覆盖 Text 控件自身的滚轮行为，统一使用像素级滚动。"""
+    if hasattr(text_widget, "_pixel_scroll_ready"):
+        return
+    text_widget._pixel_scroll_ready = True
+
+    def _on_text_scroll(event):
+        pixels = int(-1 * (event.delta / 120) * 50)
+        text_widget.yview_scroll(pixels, "pixels")
+        return "break"  # 阻止默认的按行滚动
+
+    # 实例级绑定优先于类绑定，return "break" 阻止默认行为
+    text_widget.bind("<MouseWheel>", _on_text_scroll)
+
+
+def _render_md_image(text_widget, image_path):
+    """在 tk.Text 中嵌入图片，带边框和自动标题（居中）。"""
+    if not os.path.exists(image_path):
+        fname = os.path.basename(image_path)
+        text_widget.insert("end", f"  [图片未找到: {fname}]\n", "img_placeholder")
+        return
+
+    try:
+        pil_img = Image.open(image_path)
+        max_w = 1000
+        if pil_img.width > max_w:
+            ratio = max_w / pil_img.width
+            h = int(pil_img.height * ratio)
+            pil_img = pil_img.resize((max_w, h), Image.LANCZOS)
+
+        photo = ImageTk.PhotoImage(pil_img)
+        text_widget._md_images.append(photo)
+
+        img_w = pil_img.width
+        img_h = pil_img.height
+
+        # 内容区宽度：优先拿真实宽度，回落 reqwidth，再回落估算
+        text_w = text_widget.winfo_width()
+        if text_w < 10:
+            text_w = text_widget.winfo_reqwidth()
+        if text_w < 10:
+            from utils.theme import dpix
+            text_w = dpix(680) - dpix(100)
+        full_w = max(text_w - 32, img_w)
+
+        # ---- 外层容器：撑满内容区宽度，防止被挤压 ----
+        outer = tk.Frame(text_widget, bg=COLOR_CARD_BG, width=full_w, height=img_h + 6)
+        outer.pack_propagate(False)
+
+        # ---- 图片 + 边框居中放置 ----
+        border = tk.Frame(outer, bg=COLOR_ENTRY_BORDER, bd=0)
+        inner = tk.Frame(border, bg=COLOR_CARD_BG, bd=0)
+        inner.pack(padx=1, pady=1)
+
+        lbl = tk.Label(inner, image=photo, bg=COLOR_CARD_BG, bd=0)
+        lbl.image = photo
+        lbl.pack()
+
+        border.place(relx=0.5, rely=0.5, anchor="center")
+
+        # 滚轮事件转发给 Text 控件
+        for w in (outer, border, inner, lbl):
+            _bind_scroll(w)
+
+        text_widget.insert("end", "\n")
+        text_widget.window_create("end", window=outer)
+        text_widget.insert("end", "\n")
+
+        # ---- 标题（文件名去扩展名），用全宽 Label 居中 ----
+        caption = os.path.splitext(os.path.basename(image_path))[0]
+        cap_frame = tk.Frame(text_widget, bg=COLOR_CARD_BG, width=full_w, height=30)
+        cap_frame.pack_propagate(False)
+        cap_lbl = tk.Label(cap_frame, text=f"▲ {caption}",
+                           font=(FONT_FAMILY, FONT_SIZE_CAPTION),
+                           fg=COLOR_TEXT_MUTED, bg=COLOR_CARD_BG)
+        cap_lbl.place(relx=0.5, rely=0.5, anchor="center")
+
+        for w in (cap_frame, cap_lbl):
+            _bind_scroll(w)
+
+        text_widget.window_create("end", window=cap_frame)
+        text_widget.insert("end", "\n")
+
+    except Exception as e:
+        fname = os.path.basename(image_path)
+        text_widget.insert("end", f"  [图片加载失败: {fname} — {e}]\n", "img_placeholder")
+
+
+# ==================== 标签配置 ====================
+
+
+def _setup_tags(text_widget):
+    """配置所有 tk.Text 样式标签。"""
+    if hasattr(text_widget, "_md_tags_ready"):
+        return
+    text_widget._md_tags_ready = True
+
+    # h2 标题
+    text_widget.tag_configure("h2",
+        font=(FONT_FAMILY, FONT_SIZE_HEADING + 1, "bold"),
+        foreground=COLOR_ACCENT,
+        spacing1=0, spacing3=0,
+    )
+    # h2 蓝色竖线
+    text_widget.tag_configure("h2_bar",
+        font=(FONT_FAMILY, FONT_SIZE_HEADING + 1, "bold"),
+        foreground=COLOR_ACCENT,
+    )
+    # h2 下方细线
+    text_widget.tag_configure("h2_rule",
+        font=(FONT_FAMILY, FONT_SIZE_CAPTION),
+        foreground=COLOR_ENTRY_BORDER,
+        spacing1=0, spacing3=8,
+    )
+
+    # h3 子标题
+    text_widget.tag_configure("h3",
+        font=(FONT_FAMILY, FONT_SIZE_BODY + 1, "bold"),
+        foreground=COLOR_TEXT_PRIMARY,
+        spacing1=12, spacing3=2,
+    )
+
+    # 正文
+    text_widget.tag_configure("body",
+        font=(FONT_FAMILY, FONT_SIZE_BODY),
+        foreground=COLOR_TEXT_PRIMARY,
+        lmargin1=4, lmargin2=4,
+        spacing1=1, spacing3=1,
+    )
+
+    # 行内粗体
+    text_widget.tag_configure("bold",
+        font=(FONT_FAMILY, FONT_SIZE_BODY, "bold"),
+        foreground=COLOR_TEXT_PRIMARY,
+    )
+
+    # 间隔
+    text_widget.tag_configure("spacer",
+        font=(FONT_FAMILY, 2),
+    )
+
+    # ---- 列表（lmargin1=lmargin2，等宽缩进，换行不跳位） ----
+    text_widget.tag_configure("bullet_l1",
+        font=(FONT_FAMILY, FONT_SIZE_BODY),
+        foreground=COLOR_TEXT_PRIMARY,
+        lmargin1=24, lmargin2=24,
+        spacing1=1, spacing3=1,
+    )
+    text_widget.tag_configure("bullet_l2",
+        font=(FONT_FAMILY, FONT_SIZE_BODY),
+        foreground=COLOR_TEXT_SECONDARY,
+        lmargin1=44, lmargin2=44,
+        spacing1=1, spacing3=1,
+    )
+    text_widget.tag_configure("bullet_l3",
+        font=(FONT_FAMILY, FONT_SIZE_BODY),
+        foreground=COLOR_TEXT_SECONDARY,
+        lmargin1=64, lmargin2=64,
+        spacing1=1, spacing3=1,
+    )
+    text_widget.tag_configure("bullet_l4",
+        font=(FONT_FAMILY, FONT_SIZE_BODY),
+        foreground=COLOR_TEXT_MUTED,
+        lmargin1=80, lmargin2=80,
+        spacing1=1, spacing3=1,
+    )
+    # 列表标记（强调色）
+    text_widget.tag_configure("bullet_marker",
+        foreground=COLOR_ACCENT,
+    )
+
+    # ---- 图片相关 ----
+    text_widget.tag_configure("img_line",
+        justify="center",
+    )
+    text_widget.tag_configure("img_caption",
+        font=(FONT_FAMILY, FONT_SIZE_CAPTION),
+        foreground=COLOR_TEXT_MUTED,
+        justify="center",
+        spacing1=0, spacing3=10,
+    )
+    text_widget.tag_configure("img_placeholder",
+        font=(FONT_FAMILY, FONT_SIZE_CAPTION),
+        foreground=COLOR_TEXT_MUTED,
+        background="#EEF2FF",
+        lmargin1=4, lmargin2=4,
+        spacing1=4, spacing3=4,
+        justify="center",
+    )
+
+
+def _setup_image_holder(text_widget):
+    """创建图片引用列表（防 GC）。"""
+    if not hasattr(text_widget, "_md_images"):
+        text_widget._md_images = []
+
+
+# ==================== 兼容旧版 ====================
+
+USER_GUIDE = """    频准测试系统 (PTS)
+
+    欢迎使用一体化测试系统。下面提供一些基础操作说明……
 
     如需进一步帮助，请联系开发人员（张珂）。
 """
+
+
+def render_user_guide(text_widget):
+    """已废弃 — 请使用 render_markdown(text_widget, "一键测试操作说明.md")"""
+    render_markdown(text_widget, "一键测试操作说明.md")

@@ -111,6 +111,8 @@ def _extract_instrument_ips() -> list[tuple[str, str]]:
     for attr in dir(net):
         if attr.startswith('_'):
             continue
+        if attr in _SIG_GEN_DUPLICATE_FIELDS:
+            continue
         val = getattr(net, attr, '')
         if isinstance(val, str) and re.match(r'\d+\.\d+\.\d+\.\d+', val):
             result.append((attr, val))
@@ -139,7 +141,7 @@ def _suggest_local_ip(subnet_cidr: str) -> Optional[str]:
         net = ipaddress.IPv4Network(subnet_cidr, strict=False)
     except Exception:
         return None
-    return str(net.network_address + 100)
+    return str(net.network_address + 7)
 
 
 def ping(ip: str, timeout_ms: int = 800) -> bool:
@@ -218,12 +220,15 @@ _IP_NAME_MAP = {
     'fsv3004_rin':        'FSV3004 (RIN)',
     'fsv3004_linewidth':  'FSV3004 (线宽)',
     'single_freq_sa':     '频谱仪 (单频)',
-    'sig_gen_linewidth':  '信号发生器 (线宽)',
-    'sig_gen_wavelength': '信号发生器 (PZT调制)',
-    'sig_gen_timedomain': '信号发生器 (时域)',
+    'sig_gen_linewidth':  '信号发生器',
+    'sig_gen_wavelength': '信号发生器',
+    'sig_gen_timedomain': '信号发生器',
     'scope':              '示波器 (时域)',
     'osa':                '光谱仪 (信噪比)',
 }
+
+# 同一台物理仪器的重复配置字段，网络中只显示一个
+_SIG_GEN_DUPLICATE_FIELDS = {'sig_gen_wavelength', 'sig_gen_timedomain'}
 
 
 class NetworkConfigDialog:

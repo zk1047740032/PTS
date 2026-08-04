@@ -19,6 +19,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 from core import (
     VisaInstrument,
     BaseTestGUI,
+    clear_directory,
 )
 from core.config import CFG
 
@@ -185,6 +186,15 @@ class PowerGUI(BaseTestGUI):
         }
 
         self.create_widgets()
+
+        # 独立窗口模式：居中显示
+        if parent is None:
+            sw = self.root.winfo_screenwidth()
+            sh = self.root.winfo_screenheight()
+            x = (sw - 1275) // 2
+            y = (sh - 510) // 2
+            self.root.geometry(f"1275x510+{x}+{y}")
+
         self.pm: Optional[PowerMeterController] = None
         self.collector: Optional[PowerCollector] = None
 
@@ -338,6 +348,11 @@ class PowerGUI(BaseTestGUI):
     def start_collect(self):
         p = self.get_params()
 
+        # 测试开始前清空输出文件夹
+        save_dir = p.get("save_path", "")
+        if save_dir:
+            clear_directory(save_dir, log_func=self.log)
+
         if not self.pm:
             usb_res = p["usb_resource"]
             if not usb_res:
@@ -350,6 +365,7 @@ class PowerGUI(BaseTestGUI):
             except Exception as e:
                 self.log(f"[错误] 连接功率计失败: {e}")
                 self.log(f"连接功率计失败: {e}")
+                self.auto_close(CFG.timing.auto_close_short_ms)
                 return
 
         self.collector = PowerCollector(self.pm, log_func=self.log)

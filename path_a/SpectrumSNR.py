@@ -276,6 +276,14 @@ class SpectrumSNRGUI(BaseTestGUI):
 
         self.create_widgets()
 
+        # 独立窗口模式：居中显示
+        if parent is None:
+            sw = self.root.winfo_screenwidth()
+            sh = self.root.winfo_screenheight()
+            x = (sw - 1250) // 2
+            y = (sh - 370) // 2
+            self.root.geometry(f"1250x370+{x}+{y}")
+
     # log() 复用基类 BaseTestGUI.log（线程安全，root.after 异步写入 log_box）
 
     def create_widgets(self):
@@ -347,11 +355,11 @@ class SpectrumSNRGUI(BaseTestGUI):
     def run_measurement_thread(self):
         osa = SpectrumSNR(self.params, self.log) # 注意：这里的 log 已经是线程安全的了
         try:
+            clear_directory(self.params["OUTPUT_DIR"], log_func=self.log)
+            self.log("[主机] 已清空文件夹")
             if not osa.connect():
                 self.log("[错误] 无法连接光谱仪")
                 return
-            clear_directory(self.params["OUTPUT_DIR"], log_func=self.log)
-            self.log("[主机] 已清空文件夹")
             osa.configure_osa()
             snr, wl, power = osa.measure_snr()
             osa.save_data(snr)

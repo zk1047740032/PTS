@@ -693,8 +693,17 @@ class RinTest(BaseTestRunner):
             else:
                 result_text += f"x={x_val:.0f} Hz 时, y={y_val:.3f} dBc/Hz\n"
 
-        # 弹窗显示结果
-        messagebox.showinfo("指定点的RIN值", result_text, parent=root)
+        # 判断是否一键测试模式
+        is_one_click = (hasattr(self, 'gui') and self.gui is not None
+                        and getattr(self.gui, '_one_click_test', False))
+
+        if is_one_click:
+            # 一键测试：记录结果到日志，自动关闭图表窗口
+            self.log(f"[RIN结果] {result_text}")
+            root.after(CFG.timing.auto_close_short_ms, root.destroy)
+        else:
+            # 手动模式：弹窗显示结果
+            messagebox.showinfo("指定点的RIN值", result_text, parent=root)
 
 
 # =========================================================================
@@ -881,6 +890,12 @@ class BackgroundNoiseTest(BaseTestRunner):
                 label.pack()
             except Exception as e:
                 tk.Label(win, text=f"图片加载失败: {e}", fg="red").pack()
+
+        # 一键测试模式：自动关闭截图弹窗
+        is_one_click = (hasattr(self, 'gui') and self.gui is not None
+                        and getattr(self.gui, '_one_click_test', False))
+        if is_one_click:
+            win.after(CFG.timing.auto_close_long_ms, win.destroy)
 
 
 # =========================================================================
@@ -1192,6 +1207,8 @@ class RinGUI(BaseTestGUI):
                     pass
                 self.running_task = None
                 self._active_test = None
+                # 一键测试模式：自动关闭窗口，触发进程退出
+                self.auto_close(2000)
 
         self.worker_thread = threading.Thread(target=target_bg, daemon=True)
         self.worker_thread.start()
@@ -1255,6 +1272,8 @@ class RinGUI(BaseTestGUI):
                     pass
                 self.running_task = None
                 self._active_test = None
+                # 一键测试模式：自动关闭窗口，触发进程退出
+                self.auto_close(2000)
 
         self.worker_thread = threading.Thread(target=target_seed, daemon=True)
         self.worker_thread.start()
