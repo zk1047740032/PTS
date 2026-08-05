@@ -214,11 +214,14 @@ class TimeDomain(VisaInstrument):
         """设置电流耦合方式为直流，测试结束后调用"""
         ch = self.params["SCOPE_CH"]
         self.scope.write(f":{ch}:COUP DC")
-        self.log(f"[示波器] 电流耦合方式改为直流")
+        self.scope.write(f":{ch}:SCAL 2")
+        self.log(f"[示波器] 电流耦合方式改为直流，档位设置为 2 V/div")
 
     def readAvg(self):
         """读平均值（DC耦合，在切换到AC之前调用），写入 avg.csv"""
         ch = self.params["SCOPE_CH"]
+        self.scope.write(f":{ch}:SCAL 2")
+        self.log(f"[示波器] DC 档位设置为 2 V/div")
         # 确保示波器处于运行状态并设置 Vavg 测量
         self.scope.write(":RUN")
         self.scope.write(f":MEAS:VAVG {ch}")

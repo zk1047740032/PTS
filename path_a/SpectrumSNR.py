@@ -340,6 +340,33 @@ class SpectrumSNRGUI(BaseTestGUI):
                 self.params[k] = v
         self.log(f"[参数] 中心波长：{self.params['CENTER']}nm | 扫描范围：{self.params['SPAN']}nm")
 
+    # --- 从 CSV 读取波长（一键测试模式用） ---
+    def _read_wavelength_csv(self) -> float | None:
+        """
+        读取种子波长CSV文件，用于一键测试模式。
+
+        返回:
+            float: 波长值(nm)，读取失败返回None
+        """
+        path = CFG.phase_noise.wavelength_file
+        if not os.path.exists(path):
+            self.log(f"[错误] 波长文件不存在: {path}")
+            return None
+
+        try:
+            with open(path, 'r', encoding='utf-8') as f:
+                reader = csv.reader(f)
+                for row in reader:
+                    if row and row[0].strip():
+                        wavelength = float(row[0].strip())
+                        self.log(f"[波长] 一键测试模式：从 {path} 读取中心波长: {wavelength} nm")
+                        return wavelength
+            self.log("[错误] 波长文件中未找到有效数据")
+            return None
+        except Exception as e:
+            self.log(f"[错误] 读取波长文件失败: {e}")
+            return None
+
     # --- 点击按钮只启动线程 ---
     def start_test(self):
         # 1. 禁用按钮，防止重复点击
@@ -353,6 +380,13 @@ class SpectrumSNRGUI(BaseTestGUI):
 
     # --- 实际的耗时逻辑放在这里 ---
     def run_measurement_thread(self):
+        # 一键测试模式：从波长CSV读取中心波长，替代配置默认值
+        if self._one_click_test:
+            wavelength = self._read_wavelength_csv()
+            if wavelength is not None:
+                self.params["CENTER"] = wavelength
+                self.log(f"[参数] 一键测试模式 - 中心波长已更新为: {wavelength} nm")
+
         osa = SpectrumSNR(self.params, self.log) # 注意：这里的 log 已经是线程安全的了
         try:
             clear_directory(self.params["OUTPUT_DIR"], log_func=self.log)
