@@ -79,16 +79,16 @@ def _check_single_freq_result():
     return "无"
 
 
-def _get_time_domain_vpp_values():
+def _get_time_domain_mod_depth_values():
     """
-    从 vpp.csv 读取各频率对应的 Vpp 值 (mV)。
+    从 vpp.csv 读取各频率对应的调制深度 (%)。
 
     文件格式:
-        频率(Hz),Vpp(mV)
-        100,523.00
-        300,487.00
+        频率(Hz),Vpp(mV),调制深度(%)
+        100,523.00,8.06
+        300,487.00,7.50
 
-    :return: dict, {freq_str: vpp_mv_float}，如 {"100": 523.0, "300": 487.0}
+    :return: dict, {freq_str: mod_depth_float}，如 {"100": 8.06, "300": 7.50}
              文件不存在或读取失败时返回空 dict
     """
     vpp_csv = r"C:\PTS\zhongzi\TimeDomain\vpp.csv"
@@ -99,8 +99,8 @@ def _get_time_domain_vpp_values():
             rows = list(csv.reader(f))
             result = {}
             for row in rows[1:]:  # 跳过表头
-                if len(row) >= 2:
-                    result[row[0]] = float(row[1])
+                if len(row) >= 3:
+                    result[row[0]] = float(row[2])  # 第3列：调制深度(%)
             return result
     except (OSError, ValueError, IndexError):
         return {}
@@ -185,8 +185,8 @@ def assemble_report_data():
         "text_single_freq": _check_single_freq_result(),
 
         # ---- 时域 ----
-        "text_time_domain1": _get_time_domain_vpp_values().get("100", "(未读取到时域数据)"),
-        "text_time_domain2": _get_time_domain_vpp_values().get("300", "(未读取到时域数据)"),
+        "text_time_domain1": _get_time_domain_mod_depth_values().get("100", "(未读取到时域数据)"),
+        "text_time_domain2": _get_time_domain_mod_depth_values().get("300", "(未读取到时域数据)"),
 
         # ---- Fig.5 偏振测试 ----
         "img_polarization": "暂无",

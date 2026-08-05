@@ -34,12 +34,12 @@ _FIELDS_MEASURED = [
     ("激光器输出功率",      "text_power",             False, "mW",      2),
     ("当前工作波长",       "text_center_wavelength", False, "nm",      2),
     ("快速频率调谐范围",   "text_PZT_range",         False, "GHz",     2),
-    ("相对强度噪声(RIN)",  "text_rin",               False, "dBc/Hz", 3),
+    ("相对强度噪声RMS",  "text_rin",               False, "%", 3),
     ("激光线宽(100us积分)", "text_linewidth",         False, "kHz",     2),
     ("光谱信噪比",         "text_SNR",               False, "dB",      2),
     ("单频",               "text_single_freq",      False, "",         2),
-    ("时域(100Hz)",        "text_time_domain1",       False, "mV",      2),
-    ("时域(300Hz)",        "text_time_domain2",       False, "mV",      2),
+    ("时域(100Hz)",        "text_time_domain1",       False, "%",       2),
+    ("时域(300Hz)",        "text_time_domain2",       False, "%",       2),
 ]
 
 _PLACEHOLDER = "—"

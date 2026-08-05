@@ -216,6 +216,21 @@ class TimeDomain(VisaInstrument):
         self.scope.write(f":{ch}:COUP DC")
         self.log(f"[示波器] 电流耦合方式改为直流")
 
+    def readAvg(self):
+        """读平均值（DC耦合，在切换到AC之前调用），写入 avg.csv"""
+        ch = self.params["SCOPE_CH"]
+        # 确保示波器处于运行状态并设置 Vavg 测量
+        self.scope.write(":RUN")
+        self.scope.write(f":MEAS:VAVG {ch}")
+        time.sleep(1.0)  # 等待测量稳定
+        vavg = self.read_measurement(":MEAS:VAVG?", ch)
+        self.log(f"[记录] DC 平均值 = {vavg:.4f} V")
+        # 写入 avg.csv
+        csv_path = os.path.join(self.params["OUTPUT_DIR"], "avg.csv")
+        append_row_csv(csv_path, [vavg], header=["Vavg_DC(V)"])
+        return vavg
+
+
 # ============ GUI 类 ============
 class TimeDomainGUI(BaseTestGUI):
     def __init__(self, parent=None):
@@ -226,7 +241,7 @@ class TimeDomainGUI(BaseTestGUI):
         self.params = {
             "SCOPE_IP": CFG.network.scope,
             "GEN_IP": CFG.network.sig_gen_timedomain,
-            "OUTPUT_DIR": str(CFG.dirs.time_domain),
+            "OUTPUT_DIR": str(CFG.dirs.time_domain), 
             "GEN_FREQ": CFG.time_domain.test_frequencies[0],  # 内部使用，不显示在UI
             "GEN_VOLT": CFG.time_domain.gen_volt,
             "GEN_OFFSET": CFG.time_domain.gen_offset,
@@ -336,6 +351,8 @@ class TimeDomainGUI(BaseTestGUI):
             self.log("[测试] 输出文件夹清空完成")
 
             td.connect_instruments()
+            # 在切换到AC耦合前，先记录DC平均值
+            dc_avg = td.readAvg()
             # 保存原始频率参数
             original_freq = self.params["GEN_FREQ"]
             # 测试频率列表
@@ -355,11 +372,14 @@ class TimeDomainGUI(BaseTestGUI):
                 # 读取测量结果
                 vavg = td.read_measurement(":MEAS:VAVG?")
                 vpp = td.read_measurement(":MEAS:VPP?")
+                mod_depth = (vpp / dc_avg * 100) if dc_avg else 0
                 self.log(f"[结果] {freq}Hz - Vavg = {vavg:.4f} V")
                 self.log(f"[结果] {freq}Hz - Vpp  = {vpp:.4f} V")
-                # 截图前记录 Vpp 到 CSV
+                self.log(f"[结果] {freq}Hz - 调制深度 = {mod_depth:.2f}%")
+                # 截图前记录 Vpp 和调制深度到 CSV
                 vpp_csv_path = os.path.join(self.params["OUTPUT_DIR"], CFG.time_domain.vpp_csv_filename)
-                append_row_csv(vpp_csv_path, [freq, vpp * 1000], header=["频率(Hz)", "Vpp(mV)"])
+                append_row_csv(vpp_csv_path, [freq, vpp * 1000, f"{mod_depth:.2f}"],
+                               header=["频率(Hz)", "Vpp(mV)", "调制深度(%)"])
                 self.log(f"[记录] Vpp 已写入 {vpp_csv_path}")
                 # 保存数据，文件名包含频率信息
                 #td.save_data({"Vavg(V)": vavg, "Vpp(V)": vpp}, filename_base=f"scope_measurement_{freq}Hz")
