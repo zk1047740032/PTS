@@ -29,6 +29,7 @@ from core import (
     append_row_csv,
 )
 from core.config import CFG
+from utils.theme import COLOR_SUCCESS, COLOR_WHITE, COLOR_WARNING, COLOR_BG
 
 # ============ SpectrumSNR 类 ============
 class SpectrumSNR(VisaInstrument):
@@ -255,6 +256,7 @@ class SpectrumSNRGUI(BaseTestGUI):
     def __init__(self, parent=None):
         super().__init__(parent, title="信噪比 - 独立模式",
                          geometry="1250x370")
+        self.root.configure(bg=COLOR_BG)
 
         self.params = {
             "OSA_IP": CFG.network.osa,
@@ -287,38 +289,38 @@ class SpectrumSNRGUI(BaseTestGUI):
     # log() 复用基类 BaseTestGUI.log（线程安全，root.after 异步写入 log_box）
 
     def create_widgets(self):
-        main_frame = tk.Frame(self.root)
+        main_frame = tk.Frame(self.root, bg=COLOR_BG)
         main_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
 
-        left_frame = tk.Frame(main_frame)
+        left_frame = tk.Frame(main_frame, bg=COLOR_BG)
         left_frame.grid(row=0, column=0, sticky="n", padx=(0, 5))
 
-        param_frame = tk.LabelFrame(left_frame, text="参数设置", padx=10, pady=10)
+        param_frame = tk.LabelFrame(left_frame, text="参数设置", padx=10, pady=10, bg=COLOR_BG)
         param_frame.pack(fill=tk.X, padx=0, pady=0)
 
         self.entries = {}
         row = 0
         for k, v in self.params.items():
-            tk.Label(param_frame, text=self.param_labels[k]).grid(row=row, column=0, sticky="e")
+            tk.Label(param_frame, text=self.param_labels[k], bg=COLOR_BG).grid(row=row, column=0, sticky="e")
             entry = tk.Entry(param_frame, width=25)
             entry.insert(0, str(v))
             entry.grid(row=row, column=1, padx=5, pady=2)
             self.entries[k] = entry
             row += 1
 
-        btn_frame = tk.Frame(left_frame)
+        btn_frame = tk.Frame(left_frame, bg=COLOR_BG)
         btn_frame.pack(fill=tk.X, padx=0, pady=8)
-        inner_btn_frame = tk.Frame(btn_frame)
+        inner_btn_frame = tk.Frame(btn_frame, bg=COLOR_BG)
         inner_btn_frame.pack(anchor='center')
 
         # 保存按钮引用，以便禁用/启用
-        self.btn_save = tk.Button(inner_btn_frame, text="保存参数", command=self.update_params, bg="#f4a236", fg="#FFFFFF", width=12, cursor="hand2")
+        self.btn_save = tk.Button(inner_btn_frame, text="保存参数", command=self.update_params, bg=COLOR_WARNING, fg=COLOR_WHITE, width=12, cursor="hand2")
         self.btn_save.pack(side=tk.LEFT, padx=6)
 
-        self.btn_start = tk.Button(inner_btn_frame, text="开始测试", command=self.start_test, bg="#4CAF50", fg="#FFFFFF", width=12, cursor="hand2")
+        self.btn_start = tk.Button(inner_btn_frame, text="开始测试", command=self.start_test, bg=COLOR_SUCCESS, fg=COLOR_WHITE, width=12, cursor="hand2")
         self.btn_start.pack(side=tk.LEFT, padx=6)
 
-        log_frame = tk.LabelFrame(main_frame, text="运行日志", padx=5, pady=5)
+        log_frame = tk.LabelFrame(main_frame, text="运行日志", padx=5, pady=5, bg=COLOR_BG)
         log_frame.grid(row=0, column=1, sticky="nsew", padx=(5, 0))
         self.log_box = tk.Text(log_frame)
         self.log_box.pack(fill=tk.BOTH, expand=True)

@@ -36,6 +36,8 @@ from core import (
     write_xy_csv,
 )
 from core.config import CFG
+from utils.theme import (COLOR_SUCCESS, COLOR_WHITE, COLOR_LOG_ERROR, COLOR_WARNING,
+                         FONT_FAMILY, FONT_SIZE_BODY, COLOR_BG)
 
 # ===============  DFB 种子激光器 RS-485 串口控制  ===============
 class DFBLaserController:
@@ -695,6 +697,8 @@ class SingleFrequencyGUI(BaseTestGUI):
 
         self.test_type_var = tk.StringVar(value="1μm")
 
+        self.root.configure(bg=COLOR_BG)
+
         self._build_ui()
 
         # 独立窗口模式：居中显示
@@ -724,23 +728,23 @@ class SingleFrequencyGUI(BaseTestGUI):
     # —— UI ——
     def _build_ui(self):
         # 创建主框架，分为左右两部分
-        main_frame = tk.Frame(self.root)
+        main_frame = tk.Frame(self.root, bg=COLOR_BG)
         main_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
         # 左侧框架 - 参数设置
-        left_frame = tk.Frame(main_frame)
+        left_frame = tk.Frame(main_frame, bg=COLOR_BG)
         left_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=False, padx=(0, 10))
 
         # 右侧框架 - 运行日志
-        right_frame = tk.Frame(main_frame)
+        right_frame = tk.Frame(main_frame, bg=COLOR_BG)
         right_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
 
         # 右侧顶部横栏：统计数据 + 实时参数 并排
-        top_bar = tk.Frame(right_frame)
+        top_bar = tk.Frame(right_frame, bg=COLOR_BG)
         top_bar.pack(fill=tk.X, pady=4)
 
         # 统计数据显示面板（收窄，靠左）
-        stats_frame = tk.LabelFrame(top_bar, text='统计数据', padx=6, pady=6)
+        stats_frame = tk.LabelFrame(top_bar, text='统计数据', padx=6, pady=6, bg=COLOR_BG)
         stats_frame.pack(side=tk.LEFT, fill=tk.Y, padx=(0, 6))
 
         # 创建统计标签
@@ -753,16 +757,16 @@ class SingleFrequencyGUI(BaseTestGUI):
         ]
 
         for i, (label_text, var_name) in enumerate(stats_items):
-            label = tk.Label(stats_frame, text=f"{label_text}: ")
+            label = tk.Label(stats_frame, text=f"{label_text}: ", bg=COLOR_BG)
             label.grid(row=i, column=0, sticky='w', padx=4, pady=2)
 
-            value_label = tk.Label(stats_frame, text="0", font=("Arial", 10, "bold"))
+            value_label = tk.Label(stats_frame, text="0", font=(FONT_FAMILY, FONT_SIZE_BODY, "bold"), bg=COLOR_BG)
             value_label.grid(row=i, column=1, sticky='w', padx=4, pady=2)
 
             self.stats_labels[var_name] = value_label
 
         # 实时参数显示面板（靠右，占据剩余空间）
-        realtime_frame = tk.LabelFrame(top_bar, text='实时参数', padx=6, pady=6)
+        realtime_frame = tk.LabelFrame(top_bar, text='实时参数', padx=6, pady=6, bg=COLOR_BG)
         realtime_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
         self.realtime_labels = {}
@@ -776,28 +780,28 @@ class SingleFrequencyGUI(BaseTestGUI):
         for i, (label_text, key) in enumerate(realtime_items):
             r = i // 2
             c = (i % 2) * 2
-            label = tk.Label(realtime_frame, text=f"{label_text}: ")
+            label = tk.Label(realtime_frame, text=f"{label_text}: ", bg=COLOR_BG)
             label.grid(row=r, column=c, sticky='e', padx=2, pady=2)
-            value_label = tk.Label(realtime_frame, text="--", font=("Arial", 10, "bold"))
+            value_label = tk.Label(realtime_frame, text="--", font=(FONT_FAMILY, FONT_SIZE_BODY, "bold"), bg=COLOR_BG)
             value_label.grid(row=r, column=c + 1, sticky='w', padx=2, pady=2)
             self.realtime_labels[key] = value_label
 
         # 测试类型选择区（居中+外框）- 放在左侧
-        type_labelframe = tk.LabelFrame(left_frame, text='测试项选择', padx=10, pady=10)
+        type_labelframe = tk.LabelFrame(left_frame, text='测试项选择', padx=10, pady=10, bg=COLOR_BG)
         type_labelframe.pack(fill=tk.X, pady=8)
-        type_frame = tk.Frame(type_labelframe)
+        type_frame = tk.Frame(type_labelframe, bg=COLOR_BG)
         type_frame.pack(expand=True)
-        tk.Label(type_frame, text="测试类型:").pack(side=tk.LEFT, padx=6)
+        tk.Label(type_frame, text="测试类型:", bg=COLOR_BG).pack(side=tk.LEFT, padx=6)
         type_combo = tk.OptionMenu(type_frame, self.test_type_var, "1μm", "1.5μm", command=self._on_test_type_change)
         type_combo.pack(side=tk.LEFT, padx=6)
         type_frame.pack(anchor='center')
 
         # 连接与地址设置区 - 放在左侧上方
-        conn_frame = tk.LabelFrame(left_frame, text='连接与地址', padx=8, pady=8)
+        conn_frame = tk.LabelFrame(left_frame, text='连接与地址', padx=8, pady=8, bg=COLOR_BG)
         conn_frame.pack(fill=tk.X, pady=6)
 
         # 参数设置区 - 放在左侧下方
-        param_frame = tk.LabelFrame(left_frame, text='参数设置', padx=8, pady=8)
+        param_frame = tk.LabelFrame(left_frame, text='参数设置', padx=8, pady=8, bg=COLOR_BG)
         param_frame.pack(fill=tk.X, pady=6)
 
         self.entries = {}
@@ -809,19 +813,19 @@ class SingleFrequencyGUI(BaseTestGUI):
         self._build_param_ui()
 
         # 按钮区域放在参数设置框下方，居中显示
-        btn_frame = tk.Frame(left_frame)
+        btn_frame = tk.Frame(left_frame, bg=COLOR_BG)
         btn_frame.pack(fill=tk.X, pady=8)
 
-        inner_btn_frame = tk.Frame(btn_frame)
+        inner_btn_frame = tk.Frame(btn_frame, bg=COLOR_BG)
         inner_btn_frame.pack(anchor='center')
 
-        tk.Button(inner_btn_frame, text='开始测试', bg="#4CAF50",fg= "#FFFFFF", command=self.start).pack(side='left', padx=6)
-        self.pause_btn = tk.Button(inner_btn_frame, text='暂停', bg="#FFA000", fg="#FFFFFF", command=self._toggle_pause)
+        tk.Button(inner_btn_frame, text='开始测试', bg=COLOR_SUCCESS, fg=COLOR_WHITE, command=self.start).pack(side='left', padx=6)
+        self.pause_btn = tk.Button(inner_btn_frame, text='暂停', bg=COLOR_WARNING, fg=COLOR_WHITE, command=self._toggle_pause)
         self.pause_btn.pack(side='left', padx=6)
-        tk.Button(inner_btn_frame, text='停止测试', bg="#f44336", fg= "#FFFFFF", command=self.stop).pack(side='left', padx=6)
+        tk.Button(inner_btn_frame, text='停止测试', bg=COLOR_LOG_ERROR, fg=COLOR_WHITE, command=self.stop).pack(side='left', padx=6)
 
         # 运行日志区 - 放在右侧
-        logf = tk.LabelFrame(right_frame, text='运行日志', padx=6, pady=6)
+        logf = tk.LabelFrame(right_frame, text='运行日志', padx=6, pady=6, bg=COLOR_BG)
         logf.pack(fill=tk.BOTH, expand=True)
         self.log_box = tk.Text(logf)
         self.log_box.pack(fill=tk.BOTH, expand=True)
@@ -911,7 +915,7 @@ class SingleFrequencyGUI(BaseTestGUI):
             # pause
             self.pause_flag.set()
             try:
-                self.pause_btn.config(text='继续', bg='#4CAF50')
+                self.pause_btn.config(text='继续', bg=COLOR_SUCCESS)
             except Exception:
                 pass
             self.log('[用户] 已暂停，点击继续以恢复')
@@ -919,7 +923,7 @@ class SingleFrequencyGUI(BaseTestGUI):
             # resume
             self.pause_flag.clear()
             try:
-                self.pause_btn.config(text='暂停', bg='#FFA000')
+                self.pause_btn.config(text='暂停', bg=COLOR_WARNING)
             except Exception:
                 pass
             self.log('[用户] 已继续，恢复运行')
@@ -1404,12 +1408,12 @@ class SingleFrequencyGUI(BaseTestGUI):
         for i, k in enumerate(conn_params):
             if k not in current_params:
                 continue
-            label = tk.Label(self.conn_frame, text=k)
+            label = tk.Label(self.conn_frame, text=k, bg=COLOR_BG)
             label.grid(row=i, column=0, sticky='e')
 
             if k in serial_field_keys:
                 # 串口下拉框 + 刷新按钮放在一个子 Frame 中
-                serial_row = tk.Frame(self.conn_frame)
+                serial_row = tk.Frame(self.conn_frame, bg=COLOR_BG)
                 serial_row.grid(row=i, column=1, padx=4, pady=1, sticky='w')
                 e = ttk.Combobox(serial_row, values=serial_ports, state='normal', width=12)
                 e.set(str(current_params[k]))
@@ -1429,7 +1433,7 @@ class SingleFrequencyGUI(BaseTestGUI):
         # 其他参数
         other_params = [k for k in current_params.keys() if k not in conn_params]
         for i, k in enumerate(other_params):
-            label = tk.Label(self.param_frame, text=k)
+            label = tk.Label(self.param_frame, text=k, bg=COLOR_BG)
             label.grid(row=i, column=0, sticky='e')
             e = tk.Entry(self.param_frame, width=23)
             e.insert(0, str(current_params[k]))

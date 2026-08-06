@@ -16,6 +16,7 @@ from core import (
     visa_address,
 )
 from core.config import CFG
+from utils.theme import COLOR_SUCCESS, COLOR_WHITE, COLOR_WARNING, COLOR_BG
 from core.utils import append_row_csv, clear_directory
 
 import time
@@ -239,6 +240,7 @@ class TimeDomainGUI(BaseTestGUI):
     def __init__(self, parent=None):
         super().__init__(parent, title="时域 - 独立模式", geometry="1320x420",
                          resizable=(True, True))
+        self.root.configure(bg=COLOR_BG)
 
         # 内部参数仍使用英文键
         self.params = {
@@ -275,15 +277,15 @@ class TimeDomainGUI(BaseTestGUI):
 
     def create_widgets(self):
         # 创建主容器，使用grid布局
-        main_frame = tk.Frame(self.root)
+        main_frame = tk.Frame(self.root, bg=COLOR_BG)
         main_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
 
         # 左侧容器 - 用于容纳参数设置框和按钮，形成一个整体
-        left_frame = tk.Frame(main_frame)
+        left_frame = tk.Frame(main_frame, bg=COLOR_BG)
         left_frame.grid(row=0, column=0, sticky="n", padx=(0, 5))
 
         # --- 参数设置 --- (左侧容器内) - 固定大小，不随窗口拉伸
-        param_frame = tk.LabelFrame(left_frame, text="参数设置", padx=10, pady=10)
+        param_frame = tk.LabelFrame(left_frame, text="参数设置", padx=10, pady=10, bg=COLOR_BG)
         param_frame.pack(fill=tk.X, padx=0, pady=0)
 
         self.entries = {}
@@ -292,7 +294,7 @@ class TimeDomainGUI(BaseTestGUI):
             # 跳过GEN_FREQ和SCOPE_CH，不显示在UI中
             if key in ["GEN_FREQ"]:
                 continue
-            tk.Label(param_frame, text=self.param_labels[key]).grid(row=row, column=0, sticky="e", padx=5, pady=2)
+            tk.Label(param_frame, text=self.param_labels[key], bg=COLOR_BG).grid(row=row, column=0, sticky="e", padx=5, pady=2)
             entry = tk.Entry(param_frame, width=30)
             entry.insert(0, str(val))
             entry.grid(row=row, column=1, padx=5, pady=2)
@@ -300,19 +302,19 @@ class TimeDomainGUI(BaseTestGUI):
             row += 1
 
         # --- 按钮区域 --- (左侧容器内，参数设置框下方，居中显示)
-        btn_frame = tk.Frame(left_frame)
+        btn_frame = tk.Frame(left_frame, bg=COLOR_BG)
         btn_frame.pack(fill=tk.X, padx=0, pady=8)
 
         # 创建一个内部框架来容纳按钮，实现居中
-        inner_btn_frame = tk.Frame(btn_frame)
+        inner_btn_frame = tk.Frame(btn_frame, bg=COLOR_BG)
         inner_btn_frame.pack(anchor='center')
 
         # 添加按钮
-        tk.Button(inner_btn_frame, text="保存参数", command=self.update_params, bg="#f4a236", fg="#FFFFFF", width=12, cursor="hand2").pack(side=tk.LEFT, padx=6)
-        tk.Button(inner_btn_frame, text="开始测试", command=self.start_test, bg="#4CAF50", fg="#FFFFFF", width=12, cursor="hand2").pack(side=tk.LEFT, padx=6)
+        tk.Button(inner_btn_frame, text="保存参数", command=self.update_params, bg=COLOR_WARNING, fg=COLOR_WHITE, width=12, cursor="hand2").pack(side=tk.LEFT, padx=6)
+        tk.Button(inner_btn_frame, text="开始测试", command=self.start_test, bg=COLOR_SUCCESS, fg=COLOR_WHITE, width=12, cursor="hand2").pack(side=tk.LEFT, padx=6)
 
         # --- 日志显示区域 - 右侧 --- 占据整个右侧区域
-        log_frame = tk.LabelFrame(main_frame, text="运行日志", padx=5, pady=5)
+        log_frame = tk.LabelFrame(main_frame, text="运行日志", padx=5, pady=5, bg=COLOR_BG)
         log_frame.grid(row=0, column=1, sticky="nsew", padx=(5, 0))
         self.log_box = tk.Text(log_frame)  # 基类 log() 需要的实例属性
         self.log_box.pack(fill=tk.BOTH, expand=True)

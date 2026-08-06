@@ -22,6 +22,8 @@ from core import (
     clear_directory,
 )
 from core.config import CFG
+from utils.theme import (COLOR_SUCCESS, COLOR_WHITE, COLOR_ACCENT, COLOR_SECTION_BG,
+                         COLOR_TEXT_PRIMARY, COLOR_BG)
 
 # ===============  上位机控制（pywinauto）  ===============
 try:
@@ -170,6 +172,7 @@ class PowerGUI(BaseTestGUI):
     def __init__(self, parent=None):
         super().__init__(parent, title="功率",
                          geometry="1275x510", icon="PreciLasers.ico")
+        self.root.configure(bg=COLOR_BG)
 
         self.params = {
             "usb_resource": str(CFG.usb.power_meter),
@@ -199,29 +202,29 @@ class PowerGUI(BaseTestGUI):
         self.collector: Optional[PowerCollector] = None
 
     def create_widgets(self):
-        main_container = tk.Frame(self.root)
+        main_container = tk.Frame(self.root, bg=COLOR_BG)
         main_container.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
 
-        left_container = tk.Frame(main_container)
+        left_container = tk.Frame(main_container, bg=COLOR_BG)
         left_container.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 5))
 
-        param_frame = tk.LabelFrame(left_container, text="功率读取", padx=4, pady=8)
+        param_frame = tk.LabelFrame(left_container, text="功率读取", padx=4, pady=8, bg=COLOR_BG)
         param_frame.pack(fill=tk.X, expand=False)
 
         self.entries: Dict[str, tk.Entry] = {}
 
-        connect_frame = tk.Frame(param_frame, padx=4, pady=8)
+        connect_frame = tk.Frame(param_frame, padx=4, pady=8, bg=COLOR_BG)
         connect_frame.pack(fill=tk.X, padx=3, pady=4)
 
         self._add_param_entry(connect_frame, "usb_resource", "USB资源:", self.params.get("usb_resource", ""), row=0)
         self._add_param_entry(connect_frame, "save_path", "保存路径:", self.params.get("save_path", "./data"), row=1)
 
         # 创建按钮框架，放在参数设置边框内部
-        buttons_frame = tk.Frame(param_frame)
+        buttons_frame = tk.Frame(param_frame, bg=COLOR_BG)
         buttons_frame.pack(fill=tk.X, padx=3, pady=4)
 
         # 创建一个内部框架来容纳按钮并使其居中
-        buttons_container = tk.Frame(buttons_frame)
+        buttons_container = tk.Frame(buttons_frame, bg=COLOR_BG)
         buttons_container.pack(side=tk.TOP, anchor=tk.CENTER)
 
         def list_visa_resources():
@@ -254,52 +257,52 @@ class PowerGUI(BaseTestGUI):
 
         self.btn_list_resources = tk.Button(buttons_container, text="地址",
                                             command=list_visa_resources,
-                                            bg="#1D74C0", fg="#FFFFFF", width=8, cursor="hand2")
+                                            bg=COLOR_ACCENT, fg=COLOR_WHITE, width=8, cursor="hand2")
         self.btn_list_resources.pack(side=tk.LEFT, padx=8, expand=False)
 
-        self.btn_connect = tk.Button(buttons_container, text="连接", command=self.connect_power_meter, bg="#1D74C0", fg="#FFFFFF", width=8, cursor="hand2")
+        self.btn_connect = tk.Button(buttons_container, text="连接", command=self.connect_power_meter, bg=COLOR_ACCENT, fg=COLOR_WHITE, width=8, cursor="hand2")
         self.btn_connect.pack(side=tk.LEFT, padx=8, expand=False)
 
-        self.btn_collect = tk.Button(buttons_container, text="开始", command=self.start_collect, bg="#4CAF50", fg="#FFFFFF", width=8, cursor="hand2")
+        self.btn_collect = tk.Button(buttons_container, text="开始", command=self.start_collect, bg=COLOR_SUCCESS, fg=COLOR_WHITE, width=8, cursor="hand2")
         self.btn_collect.pack(side=tk.LEFT, padx=8, expand=False)
 
         # 烤机数据计算功能框
-        burnin_frame = tk.LabelFrame(left_container, text="烤机数据计算", padx=4, pady=8)
+        burnin_frame = tk.LabelFrame(left_container, text="烤机数据计算", padx=4, pady=8, bg=COLOR_BG)
         burnin_frame.pack(fill=tk.X, expand=False, pady=(10, 0))
 
-        burnin_input_frame = tk.Frame(burnin_frame, padx=4, pady=8)
+        burnin_input_frame = tk.Frame(burnin_frame, padx=4, pady=8, bg=COLOR_BG)
         burnin_input_frame.pack(fill=tk.X, padx=3, pady=4)
 
         self._add_param_entry(burnin_input_frame, "burnin_data", "烤机数据:", self.params.get("burnin_data", ""), row=0, browse="file", entry_width=25)
         self._add_param_entry(burnin_input_frame, "burnin_output", "输出路径:", self.params.get("burnin_output", ""), row=1, browse="dir", entry_width=25)
 
         # 烤机计算按钮框架
-        burnin_buttons_frame = tk.Frame(burnin_frame)
+        burnin_buttons_frame = tk.Frame(burnin_frame, bg=COLOR_BG)
         burnin_buttons_frame.pack(fill=tk.X, padx=3, pady=4)
 
-        burnin_buttons_container = tk.Frame(burnin_buttons_frame)
+        burnin_buttons_container = tk.Frame(burnin_buttons_frame, bg=COLOR_BG)
         burnin_buttons_container.pack(side=tk.TOP, anchor=tk.CENTER)
 
-        self.btn_burnin_start = tk.Button(burnin_buttons_container, text="开始计算", command=self.start_burnin_calculation, bg="#4CAF50", fg="#FFFFFF", width=8, cursor="hand2")
+        self.btn_burnin_start = tk.Button(burnin_buttons_container, text="开始计算", command=self.start_burnin_calculation, bg=COLOR_SUCCESS, fg=COLOR_WHITE, width=8, cursor="hand2")
         self.btn_burnin_start.pack(side=tk.LEFT, padx=8, expand=False)
 
-        log_frame = tk.LabelFrame(main_container, text="运行日志", padx=6, pady=6)
+        log_frame = tk.LabelFrame(main_container, text="运行日志", padx=6, pady=6, bg=COLOR_BG)
         log_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=(5, 0))
         self.log_box = tk.Text(log_frame)
         self.log_box.pack(fill=tk.BOTH, expand=True)
 
     def _add_param_entry(self, parent, key, label, default="", row=0, browse=None, entry_width=30):
-        tk.Label(parent, text=label, anchor="w", width=8).grid(row=row, column=0, sticky="w", padx=4, pady=4)
+        tk.Label(parent, text=label, anchor="w", width=8, bg=COLOR_BG).grid(row=row, column=0, sticky="w", padx=4, pady=4)
         ent = tk.Entry(parent, width=entry_width)
         ent.insert(0, str(self.params.get(key, default)))
         ent.grid(row=row, column=1, padx=4, pady=4)
         self.entries[key] = ent
         if browse == "file":
             tk.Button(parent, text="浏览", command=lambda k=key: self.browse_file(k),
-                     bg="#F0F0F0", fg="#000000", width=4, height=1, relief="flat", cursor="hand2").grid(row=row, column=2, padx=0, pady=2)
+                     bg=COLOR_SECTION_BG, fg=COLOR_TEXT_PRIMARY, width=4, height=1, relief="flat", cursor="hand2").grid(row=row, column=2, padx=0, pady=2)
         if browse == "dir":
             tk.Button(parent, text="浏览", command=lambda k=key: self.browse_dir(k),
-                     bg="#F0F0F0", fg="#000000", width=4, height=0, relief="flat", cursor="hand2").grid(row=row, column=2, padx=0, pady=2)
+                     bg=COLOR_SECTION_BG, fg=COLOR_TEXT_PRIMARY, width=4, height=0, relief="flat", cursor="hand2").grid(row=row, column=2, padx=0, pady=2)
         return ent
 
     # log() 复用基类 BaseTestGUI.log（线程安全，root.after 异步写入 log_box）

@@ -31,6 +31,9 @@ from core import (
     read_instrument_screenshot,
 )
 from core.config import CFG
+from utils.theme import (COLOR_SUCCESS, COLOR_WHITE, COLOR_LOG_ERROR,
+                         FONT_FAMILY, FONT_SIZE_BODY, FONT_SIZE_HEADING,
+                         COLOR_BG)
 
 
 # ============ 信号发生器控制类 ============
@@ -436,6 +439,8 @@ class LineWidth_FSV3004_GUI(BaseTestGUI):
         """
         super().__init__(parent, title="线宽 - 独立模式", geometry="1150x550")
 
+        self.root.configure(bg=COLOR_BG)
+
         # 初始化参数
         self.params = {
             # 仪器参数（只保存数值，不保存单位）
@@ -489,23 +494,23 @@ class LineWidth_FSV3004_GUI(BaseTestGUI):
         5. 将输入控件实例存入 self.entries，供后续读取与保存参数使用。
         """
         # 创建主框架，分为左右两部分
-        main_frame = tk.Frame(self.root)
+        main_frame = tk.Frame(self.root, bg=COLOR_BG)
         main_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
         # 左侧框架 - 参数设置
-        left_frame = tk.Frame(main_frame)
+        left_frame = tk.Frame(main_frame, bg=COLOR_BG)
         left_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=False, padx=(0, 10))
 
         # 右侧框架 - 运行日志
-        right_frame = tk.Frame(main_frame)
+        right_frame = tk.Frame(main_frame, bg=COLOR_BG)
         right_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
 
         # 连接与地址设置区 - 放在左侧上方
-        conn_frame = tk.LabelFrame(left_frame, text='连接与地址', padx=8, pady=8)
+        conn_frame = tk.LabelFrame(left_frame, text='连接与地址', padx=8, pady=8, bg=COLOR_BG)
         conn_frame.pack(fill=tk.X, pady=6)
 
         # 参数设置区 - 放在左侧下方
-        param_frame = tk.LabelFrame(left_frame, text='参数设置', padx=8, pady=8)
+        param_frame = tk.LabelFrame(left_frame, text='参数设置', padx=8, pady=8, bg=COLOR_BG)
         param_frame.pack(fill=tk.X, pady=6)
 
         self.entries = {}
@@ -516,7 +521,7 @@ class LineWidth_FSV3004_GUI(BaseTestGUI):
             # 显示时使用更友好的标签名
             display_name = k
             # 统一标签宽度和对齐方式
-            label = tk.Label(conn_frame, text=display_name, width=12, anchor='e')
+            label = tk.Label(conn_frame, text=display_name, width=12, anchor='e', bg=COLOR_BG)
             label.grid(row=i, column=0, sticky='e', padx=5, pady=2)
             # 统一输入框宽度
             e = tk.Entry(conn_frame, width=20)
@@ -528,7 +533,7 @@ class LineWidth_FSV3004_GUI(BaseTestGUI):
         test_params = ['Ref Level(mV)', 'M1位置(MHz)', '中心频率(MHz)', 'RBW(Hz)', 'N dB down']
         for i, k in enumerate(test_params):
             # 统一标签宽度和对齐方式
-            label = tk.Label(param_frame, text=k, width=12, anchor='e')
+            label = tk.Label(param_frame, text=k, width=12, anchor='e', bg=COLOR_BG)
             label.grid(row=i, column=0, sticky='e', padx=5, pady=2)
             # 统一输入框宽度
             e = tk.Entry(param_frame, width=20)
@@ -537,23 +542,23 @@ class LineWidth_FSV3004_GUI(BaseTestGUI):
             self.entries[k] = e
 
         # 按钮区域放在参数设置框下方，居中显示
-        btn_frame = tk.Frame(left_frame)
+        btn_frame = tk.Frame(left_frame, bg=COLOR_BG)
         btn_frame.pack(fill=tk.X, pady=8)
 
         # 创建一个内部框架来容纳按钮，实现居中
-        inner_btn_frame = tk.Frame(btn_frame)
+        inner_btn_frame = tk.Frame(btn_frame, bg=COLOR_BG)
         inner_btn_frame.pack(anchor='center')
 
-        self.start_btn = tk.Button(inner_btn_frame, text='开始测试', bg="#4CAF50", fg="#FFFFFF", command=self.start_measurement, cursor="hand2")
+        self.start_btn = tk.Button(inner_btn_frame, text='开始测试', bg=COLOR_SUCCESS, fg=COLOR_WHITE, command=self.start_measurement, cursor="hand2")
         self.start_btn.pack(side='left', padx=6)
 
-        self.stop_btn = tk.Button(inner_btn_frame, text='停止测试', bg="#f44336", fg="#FFFFFF", command=self.stop_measurement, state=tk.DISABLED, cursor="hand2")
+        self.stop_btn = tk.Button(inner_btn_frame, text='停止测试', bg=COLOR_LOG_ERROR, fg=COLOR_WHITE, command=self.stop_measurement, state=tk.DISABLED, cursor="hand2")
         self.stop_btn.pack(side='left', padx=6)
 
         # 运行日志区 - 放在右侧
-        logf = tk.LabelFrame(right_frame, text='运行日志', padx=6, pady=6)
+        logf = tk.LabelFrame(right_frame, text='运行日志', padx=6, pady=6, bg=COLOR_BG)
         logf.pack(fill=tk.BOTH, expand=True)
-        self.log_box = tk.Text(logf, font=('Arial', 10))
+        self.log_box = tk.Text(logf, font=(FONT_FAMILY, FONT_SIZE_BODY))
         self.log_box.pack(fill=tk.BOTH, expand=True)
 
     def _save_params(self):
@@ -860,11 +865,11 @@ class LineWidth_FSV3004_GUI(BaseTestGUI):
         right_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
 
         # 结果列表标题
-        list_title = tk.Label(left_frame, text="测试结果列表", font=('Arial', 14, 'bold'))
+        list_title = tk.Label(left_frame, text="测试结果列表", font=(FONT_FAMILY, FONT_SIZE_HEADING, 'bold'))
         list_title.pack(pady=10)
 
         # 结果列表框
-        listbox = tk.Listbox(left_frame, font=('Arial', 12), selectmode=tk.SINGLE)
+        listbox = tk.Listbox(left_frame, font=(FONT_FAMILY, 12), selectmode=tk.SINGLE)
         listbox.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
 
         # 填充结果列表
@@ -948,11 +953,11 @@ class LineWidth_FSV3004_GUI(BaseTestGUI):
         listbox.bind('<<ListboxSelect>>', show_selected_image)
 
         # 保存按钮
-        save_btn = tk.Button(btn_frame, text="保存选中图片", font=('Arial', 12), bg="#4CAF50", fg="white", command=save_selected_image, cursor="hand2")
+        save_btn = tk.Button(btn_frame, text="保存选中图片", font=(FONT_FAMILY, 12), bg=COLOR_SUCCESS, fg=COLOR_WHITE, command=save_selected_image, cursor="hand2")
         save_btn.pack(side=tk.LEFT, padx=5)
 
         # 关闭按钮
-        close_btn = tk.Button(btn_frame, text="关闭", font=('Arial', 12), bg="#f44336", fg="white", command=win.destroy, cursor="hand2")
+        close_btn = tk.Button(btn_frame, text="关闭", font=(FONT_FAMILY, 12), bg=COLOR_LOG_ERROR, fg=COLOR_WHITE, command=win.destroy, cursor="hand2")
         close_btn.pack(side=tk.RIGHT, padx=5)
 
         # 初始显示第一张图片
@@ -1026,10 +1031,10 @@ class LineWidth_FSV3004_GUI(BaseTestGUI):
             win.destroy()
 
         # 添加保存按钮
-        tk.Button(btn_frame, text="保存图片", font=('Arial', 12), command=_save_img, cursor="hand2").pack(side=tk.LEFT, padx=10)
+        tk.Button(btn_frame, text="保存图片", font=(FONT_FAMILY, 12), command=_save_img, cursor="hand2").pack(side=tk.LEFT, padx=10)
 
         # 添加关闭按钮
-        tk.Button(btn_frame, text="关闭", font=('Arial', 12), command=_close_window, cursor="hand2").pack(side=tk.RIGHT, padx=10)
+        tk.Button(btn_frame, text="关闭", font=(FONT_FAMILY, 12), command=_close_window, cursor="hand2").pack(side=tk.RIGHT, padx=10)
 
         # 显示图片的标签
         img_label = tk.Label(win, image=win.img_tk)

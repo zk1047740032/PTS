@@ -23,6 +23,7 @@ import sys, pathlib
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 from core import BaseTestGUI
 from core.config import CFG
+from utils.theme import COLOR_SUCCESS, COLOR_WHITE, COLOR_BG, COLOR_CARD_BG
 
 
 def click_button():
@@ -85,6 +86,8 @@ class PhaseNoiseGUI(BaseTestGUI):
         super().__init__(parent, title="PhaseNoise",
                          geometry="1140x420", icon="PreciLasers.ico")
 
+        self.root.configure(bg=COLOR_BG)
+
         self.wavelength_path = tk.StringVar(value=str(CFG.dirs.wavelength / "wavelength.csv"))
         self.program_1um = tk.StringVar(value=str(CFG.phase_noise.program_1um))
         self.program_1_5um = tk.StringVar(value=str(CFG.phase_noise.program_1_5um))
@@ -103,50 +106,50 @@ class PhaseNoiseGUI(BaseTestGUI):
         """
         构建GUI界面布局
         """
-        main_frame = tk.Frame(self.root)
+        main_frame = tk.Frame(self.root, bg=COLOR_BG)
         main_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
-        left_frame = tk.Frame(main_frame)
+        left_frame = tk.Frame(main_frame, bg=COLOR_BG)
         left_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=False, padx=(0, 10))
 
-        right_frame = tk.Frame(main_frame)
+        right_frame = tk.Frame(main_frame, bg=COLOR_BG)
         right_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
 
-        config_frame = tk.LabelFrame(left_frame, text="配置", padx=10, pady=10)
+        config_frame = tk.LabelFrame(left_frame, text="配置", padx=10, pady=10, bg=COLOR_BG)
         config_frame.pack(fill=tk.X, pady=8)
 
-        tk.Label(config_frame, text="种子波长文件:", anchor="w").pack(fill=tk.X)
-        path_frame = tk.Frame(config_frame)
+        tk.Label(config_frame, text="种子波长文件:", anchor="w", bg=COLOR_BG).pack(fill=tk.X)
+        path_frame = tk.Frame(config_frame, bg=COLOR_BG)
         path_frame.pack(fill=tk.X, pady=(0, 5))
         tk.Entry(path_frame, textvariable=self.wavelength_path, width=28).pack(side=tk.LEFT, fill=tk.X, expand=True)
         #tk.Button(path_frame, text="浏览", command=self._browse_wavelength, cursor="hand2", width=6).pack(side=tk.RIGHT, padx=(2, 0))
 
-        tk.Label(config_frame, text="1μm程序:", anchor="w").pack(fill=tk.X)
+        tk.Label(config_frame, text="1μm程序:", anchor="w", bg=COLOR_BG).pack(fill=tk.X)
         entry_1um = tk.Entry(config_frame, textvariable=self.program_1um, width=35)
         entry_1um.pack(pady=(0, 5))
         #tk.Button(config_frame, text="浏览", command=lambda: self._browse_program(self.program_1um), cursor="hand2", width=6).pack(anchor="e", padx=(0, 0))
 
-        tk.Label(config_frame, text="1.5μm程序:", anchor="w").pack(fill=tk.X)
+        tk.Label(config_frame, text="1.5μm程序:", anchor="w", bg=COLOR_BG).pack(fill=tk.X)
         entry_1_5um = tk.Entry(config_frame, textvariable=self.program_1_5um, width=35)
         entry_1_5um.pack(pady=(0, 5))
         #tk.Button(config_frame, text="浏览", command=lambda: self._browse_program(self.program_1_5um), cursor="hand2", width=6).pack(anchor="e")
 
-        btn_frame = tk.Frame(left_frame)
+        btn_frame = tk.Frame(left_frame, bg=COLOR_BG)
         btn_frame.pack(fill=tk.X, pady=20)
 
-        inner_btn_frame = tk.Frame(btn_frame)
+        inner_btn_frame = tk.Frame(btn_frame, bg=COLOR_BG)
         inner_btn_frame.pack(anchor="center")
 
         self.start_btn = tk.Button(
             inner_btn_frame, text="开始测试",
-            bg="#4CAF50", fg="#FFFFFF",
+            bg=COLOR_SUCCESS, fg=COLOR_WHITE,
             command=self.start_test,
             cursor="hand2",
             width=12
         )
         self.start_btn.pack(side=tk.LEFT)
 
-        log_frame = tk.LabelFrame(right_frame, text="运行日志", padx=6, pady=6)
+        log_frame = tk.LabelFrame(right_frame, text="运行日志", padx=6, pady=6, bg=COLOR_BG)
         log_frame.pack(fill=tk.BOTH, expand=True)
 
         self.log_box = tk.Text(log_frame)

@@ -21,6 +21,8 @@ from pywinauto import Desktop
 from drivers import wlmData
 from core import VisaInstrument, BaseTestGUI, visa_address, clear_directory
 from core.config import CFG
+from utils.theme import (COLOR_BG, COLOR_SUCCESS, COLOR_WHITE, COLOR_LOG_ERROR,
+                         FONT_FAMILY, FONT_SIZE_BODY)
 
 # ===============  上位机控制（pywinauto）  ===============
 try:
@@ -379,6 +381,7 @@ class WaveLengthTestGUI(BaseTestGUI):
             parent (tk.Widget, optional): 父控件。若为None则创建独立窗口。
         """
         super().__init__(parent, title="PZT调制", geometry="1200x820")
+        self.root.configure(bg=COLOR_BG)
 
         self.params_1um = {
             '信号源IP': CFG.network.sig_gen_wavelength,
@@ -420,32 +423,32 @@ class WaveLengthTestGUI(BaseTestGUI):
         """
         构建GUI界面布局
         """
-        main_frame = tk.Frame(self.root)
+        main_frame = tk.Frame(self.root, bg=COLOR_BG)
         main_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
-        left_frame = tk.Frame(main_frame)
+        left_frame = tk.Frame(main_frame, bg=COLOR_BG)
         left_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=False, padx=(0, 10))
 
-        right_frame = tk.Frame(main_frame)
+        right_frame = tk.Frame(main_frame, bg=COLOR_BG)
         right_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
 
-        type_labelframe = tk.LabelFrame(left_frame, text='测试项选择', padx=10, pady=10)
+        type_labelframe = tk.LabelFrame(left_frame, text='测试项选择', padx=10, pady=10, bg=COLOR_BG)
         type_labelframe.pack(fill=tk.X, pady=8)
-        type_frame = tk.Frame(type_labelframe)
+        type_frame = tk.Frame(type_labelframe, bg=COLOR_BG)
         type_frame.pack(expand=True)
-        tk.Label(type_frame, text="测试类型:").pack(side=tk.LEFT, padx=6)
+        tk.Label(type_frame, text="测试类型:", bg=COLOR_BG).pack(side=tk.LEFT, padx=6)
         type_combo = tk.OptionMenu(type_frame, self.test_type_var, "1μm", "1.5μm", command=self._on_test_type_change)
         type_combo.pack(side=tk.LEFT, padx=6)
 
-        conn_frame = tk.LabelFrame(left_frame, text='连接设置', padx=8, pady=8)
+        conn_frame = tk.LabelFrame(left_frame, text='连接设置', padx=8, pady=8, bg=COLOR_BG)
         conn_frame.pack(fill=tk.X, pady=4)
         conn_frame.columnconfigure(1, weight=1)
 
-        init_frame = tk.LabelFrame(left_frame, text='初始测试参数', padx=8, pady=8)
+        init_frame = tk.LabelFrame(left_frame, text='初始测试参数', padx=8, pady=8, bg=COLOR_BG)
         init_frame.pack(fill=tk.X, pady=4)
         init_frame.columnconfigure(1, weight=1)
 
-        sweep_frame = tk.LabelFrame(left_frame, text='变参循环测试', padx=8, pady=8)
+        sweep_frame = tk.LabelFrame(left_frame, text='变参循环测试', padx=8, pady=8, bg=COLOR_BG)
         sweep_frame.pack(fill=tk.BOTH, expand=True, pady=4)
 
         self.entries = {}
@@ -454,7 +457,7 @@ class WaveLengthTestGUI(BaseTestGUI):
 
         conn_params = ['信号源IP', '输出目录']
         for i, k in enumerate(conn_params):
-            label = tk.Label(conn_frame, text=k, width=10, anchor='e')
+            label = tk.Label(conn_frame, text=k, width=10, anchor='e', bg=COLOR_BG)
             label.grid(row=i, column=0, sticky='e', padx=2, pady=2)
             e = tk.Entry(conn_frame)
             e.insert(0, str(self.params[k]))
@@ -463,24 +466,24 @@ class WaveLengthTestGUI(BaseTestGUI):
 
         init_params = ['频率(Hz)', '幅值(mVpp)', '偏置(mVdc)']
         for i, k in enumerate(init_params):
-            label = tk.Label(init_frame, text=k, width=10, anchor='e')
+            label = tk.Label(init_frame, text=k, width=10, anchor='e', bg=COLOR_BG)
             label.grid(row=i, column=0, sticky='e', padx=2, pady=2)
             e = tk.Entry(init_frame)
             e.insert(0, str(self.params[k]))
             e.grid(row=i, column=1, padx=2, pady=2, sticky='ew')
             self.entries[k] = e
 
-        sweep_label = tk.Label(sweep_frame, text='测试参数:')
+        sweep_label = tk.Label(sweep_frame, text='测试参数:', bg=COLOR_BG)
         sweep_label.pack(anchor='w', padx=5, pady=2)
 
-        self.sweep_text = tk.Text(sweep_frame, height=4, width=35, font=('Consolas', 10))
+        self.sweep_text = tk.Text(sweep_frame, height=4, width=35, font=(FONT_FAMILY, FONT_SIZE_BODY))
         self.sweep_text.pack(fill=tk.BOTH, expand=True, padx=5, pady=2)
         self.sweep_text.insert('1.0', self.params['变参测试参数'])
 
-        time_frame = tk.Frame(sweep_frame)
+        time_frame = tk.Frame(sweep_frame, bg=COLOR_BG)
         time_frame.pack(fill=tk.X, padx=5, pady=4)
 
-        time_label = tk.Label(time_frame, text='调制时间(秒):', width=10, anchor='w')
+        time_label = tk.Label(time_frame, text='调制时间(秒):', width=10, anchor='w', bg=COLOR_BG)
         time_label.pack(side=tk.LEFT)
 
         self.time_entry = tk.Entry(time_frame, width=10)
@@ -488,15 +491,15 @@ class WaveLengthTestGUI(BaseTestGUI):
         self.time_entry.pack(side=tk.LEFT, padx=4)
         self.entries['调制时间(秒)'] = self.time_entry
 
-        btn_frame = tk.Frame(left_frame)
+        btn_frame = tk.Frame(left_frame, bg=COLOR_BG)
         btn_frame.pack(fill=tk.X, pady=8)
 
-        inner_btn_frame = tk.Frame(btn_frame)
+        inner_btn_frame = tk.Frame(btn_frame, bg=COLOR_BG)
         inner_btn_frame.pack(anchor='center')
 
         self.start_btn = tk.Button(
             inner_btn_frame, text='开始测试',
-            bg="#4CAF50", fg="#FFFFFF",
+            bg=COLOR_SUCCESS, fg=COLOR_WHITE,
             command=self.start_test,
             cursor="hand2",
             width=12
@@ -505,7 +508,7 @@ class WaveLengthTestGUI(BaseTestGUI):
 
         self.stop_btn = tk.Button(
             inner_btn_frame, text='停止测试',
-            bg="#f44336", fg="#FFFFFF",
+            bg=COLOR_LOG_ERROR, fg=COLOR_WHITE,
             command=self.stop_test,
             state=tk.DISABLED,
             cursor="hand2",
@@ -513,10 +516,10 @@ class WaveLengthTestGUI(BaseTestGUI):
         )
         self.stop_btn.pack(side='left', padx=6)
 
-        log_frame = tk.LabelFrame(right_frame, text='运行日志', padx=6, pady=6)
+        log_frame = tk.LabelFrame(right_frame, text='运行日志', padx=6, pady=6, bg=COLOR_BG)
         log_frame.pack(fill=tk.BOTH, expand=True)
 
-        self.log_box = tk.Text(log_frame, font=('Consolas', 10))
+        self.log_box = tk.Text(log_frame, font=(FONT_FAMILY, FONT_SIZE_BODY))
         self.log_box.pack(fill=tk.BOTH, expand=True)
 
         scrollbar = tk.Scrollbar(self.log_box)
@@ -793,7 +796,7 @@ class WaveLengthTestGUI(BaseTestGUI):
 
         init_params = ['频率(Hz)', '幅值(mVpp)', '偏置(mVdc)']
         for i, k in enumerate(init_params):
-            label = tk.Label(self.init_frame, text=k, width=10, anchor='e')
+            label = tk.Label(self.init_frame, text=k, width=10, anchor='e', bg=COLOR_BG)
             label.grid(row=i, column=0, sticky='e', padx=2, pady=2)
             e = tk.Entry(self.init_frame)
             e.insert(0, str(self.params[k]))

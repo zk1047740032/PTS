@@ -40,6 +40,8 @@ from core import (
     read_instrument_screenshot,
 )
 from core.config import CFG
+from utils.theme import (COLOR_SUCCESS, COLOR_WHITE, COLOR_LOG_ERROR, COLOR_ACCENT,
+                         COLOR_WARNING, COLOR_BG, FONT_FAMILY, FONT_SIZE_TITLE, FONT_SIZE_HEADING)
 
 # default_logger 保留以兼容历史调用点；新代码直接用 print 或基类 log
 def default_logger(msg: str):
@@ -525,7 +527,7 @@ class RinTest(BaseTestRunner):
         top_frame = tk.Frame(root)
         top_frame.pack(side=tk.TOP, fill=tk.X, pady=10)
         # 在框架中间放置保存按钮
-        tk.Button(top_frame, text="保存", command=save_figure, font=('SimHei', 20), cursor="hand2").pack(side=tk.TOP)
+        tk.Button(top_frame, text="保存", command=save_figure, font=(FONT_FAMILY, FONT_SIZE_TITLE), cursor="hand2").pack(side=tk.TOP)
 
         """图1: RIN曲线"""
         ax1.plot(self.ddx, self.ddy, color="#085cab", linewidth=2) # 曲线
@@ -871,14 +873,14 @@ class BackgroundNoiseTest(BaseTestRunner):
         btn_frame.pack(side=tk.TOP)
 
         # 保存图片按钮
-        tk.Button(btn_frame, text="保存图片", command=save_image, font=('SimHei', 16), cursor="hand2").pack(side=tk.LEFT, padx=10)
+        tk.Button(btn_frame, text="保存图片", command=save_image, font=(FONT_FAMILY, FONT_SIZE_HEADING), cursor="hand2").pack(side=tk.LEFT, padx=10)
         # 保存数据按钮
-        tk.Button(btn_frame, text="保存数据", command=save_data, font=('SimHei', 16), cursor="hand2").pack(side=tk.LEFT, padx=10)
+        tk.Button(btn_frame, text="保存数据", command=save_data, font=(FONT_FAMILY, FONT_SIZE_HEADING), cursor="hand2").pack(side=tk.LEFT, padx=10)
 
         # 截图已通过 SCPI 直写本地，无需网络同步等待
         if not os.path.exists(local_img_path) or os.path.getsize(local_img_path) == 0:
             msg = f"图片未找到：{local_img_path}"
-            tk.Label(win, text=msg, fg="red", wraplength=700, justify='left').pack(padx=8, pady=8)
+            tk.Label(win, text=msg, fg=COLOR_LOG_ERROR, wraplength=700, justify='left').pack(padx=8, pady=8)
             self.log(f"[显示] {msg}")
         else:
             try:
@@ -889,7 +891,7 @@ class BackgroundNoiseTest(BaseTestRunner):
                 label.image = photo  # 防止被回收
                 label.pack()
             except Exception as e:
-                tk.Label(win, text=f"图片加载失败: {e}", fg="red").pack()
+                tk.Label(win, text=f"图片加载失败: {e}", fg=COLOR_LOG_ERROR).pack()
 
         # 一键测试模式：自动关闭截图弹窗
         is_one_click = (hasattr(self, 'gui') and self.gui is not None
@@ -938,6 +940,8 @@ class RinGUI(BaseTestGUI):
         if parent is None:
             self.set_center(1170, 330)
 
+        self.root.configure(bg=COLOR_BG)
+
         # 默认参数（保留原脚本默认路径/IP）
         self.params = {
             "osa_ip": CFG.network.fsv3004_rin,
@@ -965,15 +969,15 @@ class RinGUI(BaseTestGUI):
         包括参数设置区、按钮区域和日志显示区
         """
         # 创建主容器，使用grid布局
-        main_container = tk.Frame(self.root)
+        main_container = tk.Frame(self.root, bg=COLOR_BG)
         main_container.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
 
         # 左侧容器 - 用于容纳参数设置框和按钮，形成一个整体
-        left_frame = tk.Frame(main_container)
+        left_frame = tk.Frame(main_container, bg=COLOR_BG)
         left_frame.grid(row=0, column=0, sticky="n", padx=(0, 5))
 
         # --- 参数设置 --- (左侧容器内) - 固定大小，不随窗口拉伸
-        param_frame = tk.LabelFrame(left_frame, text="参数设置", padx=10, pady=10)
+        param_frame = tk.LabelFrame(left_frame, text="参数设置", padx=10, pady=10, bg=COLOR_BG)
         param_frame.pack(fill=tk.X, padx=0, pady=0)
 
         # IP / port / 保存路径
@@ -983,50 +987,50 @@ class RinGUI(BaseTestGUI):
         self._add_param_entry(param_frame, "save_path", "保存路径:", self.params["save_path"], row=2)
 
         # --- 按钮区域 --- (左侧容器内，参数设置框下方，居中显示)
-        btn_frame = tk.Frame(left_frame)
+        btn_frame = tk.Frame(left_frame, bg=COLOR_BG)
         btn_frame.pack(fill=tk.X, padx=0, pady=8)
 
         # 创建一个内部框架来容纳按钮，实现居中
-        inner_btn_frame = tk.Frame(btn_frame)
+        inner_btn_frame = tk.Frame(btn_frame, bg=COLOR_BG)
         inner_btn_frame.pack(anchor='center')
 
         # 第一行按钮框架（测RIN、测底噪和种子光）
-        first_row_frame = tk.Frame(inner_btn_frame)
+        first_row_frame = tk.Frame(inner_btn_frame, bg=COLOR_BG)
         first_row_frame.pack(fill=tk.X, pady=(0, 6))  # 第一行与第二行之间有间距
 
         # 第二行按钮框架（连接和停止）
-        second_row_frame = tk.Frame(inner_btn_frame)
+        second_row_frame = tk.Frame(inner_btn_frame, bg=COLOR_BG)
         second_row_frame.pack(fill=tk.X)
 
         # 添加按钮
-        self.btn_rin = tk.Button(first_row_frame, text="测RIN", command=self.start_rin, bg="#28862B", fg="#FFFFFF", width=10, cursor="hand2")
-        self.btn_bg = tk.Button(first_row_frame, text="测底噪", command=self.start_background, bg="#28862B", fg="#FFFFFF", width=10, cursor="hand2")
-        self.btn_seed = tk.Button(first_row_frame, text="种子光", command=self.start_seedlight, bg="#28862B", fg="#FFFFFF", width=10, cursor="hand2")
-        self.btn_connect = tk.Button(second_row_frame, text="连接", command=self.connect_instrument, bg="#1D74C0", fg="#FFFFFF", width=10, cursor="hand2")
-        self.btn_stop = tk.Button(second_row_frame, text="停止", command=self.stop_running, bg="#f44336", fg="#FFFFFF", width=10, cursor="hand2")
-        self.btn_rename = tk.Button(second_row_frame, text="改名", command=self.rename_files, bg="#FF9800", fg="#FFFFFF", width=10, cursor="hand2")
+        self.btn_rin = tk.Button(first_row_frame, text="测RIN", command=self.start_rin, bg=COLOR_SUCCESS, fg=COLOR_WHITE, width=10, cursor="hand2")
+        self.btn_bg = tk.Button(first_row_frame, text="测底噪", command=self.start_background, bg=COLOR_SUCCESS, fg=COLOR_WHITE, width=10, cursor="hand2")
+        self.btn_seed = tk.Button(first_row_frame, text="种子光", command=self.start_seedlight, bg=COLOR_SUCCESS, fg=COLOR_WHITE, width=10, cursor="hand2")
+        self.btn_connect = tk.Button(second_row_frame, text="连接", command=self.connect_instrument, bg=COLOR_ACCENT, fg=COLOR_WHITE, width=10, cursor="hand2")
+        self.btn_stop = tk.Button(second_row_frame, text="停止", command=self.stop_running, bg=COLOR_LOG_ERROR, fg=COLOR_WHITE, width=10, cursor="hand2")
+        self.btn_rename = tk.Button(second_row_frame, text="改名", command=self.rename_files, bg=COLOR_WARNING, fg=COLOR_WHITE, width=10, cursor="hand2")
 
         # 排列按钮
         # 第一行按钮居中
-        first_row_spacer = tk.Label(first_row_frame)
+        first_row_spacer = tk.Label(first_row_frame, bg=COLOR_BG)
         first_row_spacer.pack(side=tk.LEFT, expand=True)  # 左侧填充
         self.btn_rin.pack(side=tk.LEFT, padx=6)
         self.btn_bg.pack(side=tk.LEFT, padx=6)
         self.btn_seed.pack(side=tk.LEFT, padx=6)
-        first_row_spacer2 = tk.Label(first_row_frame)
+        first_row_spacer2 = tk.Label(first_row_frame, bg=COLOR_BG)
         first_row_spacer2.pack(side=tk.LEFT, expand=True)  # 右侧填充
 
         # 第二行按钮居中
-        second_row_spacer = tk.Label(second_row_frame)
+        second_row_spacer = tk.Label(second_row_frame, bg=COLOR_BG)
         second_row_spacer.pack(side=tk.LEFT, expand=True)  # 左侧填充
         self.btn_connect.pack(side=tk.LEFT, padx=6)
         self.btn_stop.pack(side=tk.LEFT, padx=6)
         self.btn_rename.pack(side=tk.LEFT, padx=6)
-        second_row_spacer2 = tk.Label(second_row_frame)
+        second_row_spacer2 = tk.Label(second_row_frame, bg=COLOR_BG)
         second_row_spacer2.pack(side=tk.LEFT, expand=True)  # 右侧填充
 
         # --- 日志显示区域 - 右侧 --- 占据整个右侧区域
-        log_frame = tk.LabelFrame(main_container, text="运行日志", padx=5, pady=5)
+        log_frame = tk.LabelFrame(main_container, text="运行日志", padx=5, pady=5, bg=COLOR_BG)
         log_frame.grid(row=0, column=1, sticky="nsew", padx=(5, 0))
         self.log_box = tk.Text(log_frame, wrap=tk.WORD)
         self.log_box.pack(fill=tk.BOTH, expand=True)
@@ -1037,7 +1041,7 @@ class RinGUI(BaseTestGUI):
         main_container.grid_rowconfigure(0, weight=1)     # 第一行可以扩展
 
     def _add_param_entry(self, parent, key, label, default="", row=0, browse=None):
-        tk.Label(parent, text=label, anchor="e", width=10).grid(row=row, column=0, sticky="e", padx=4, pady=4)
+        tk.Label(parent, text=label, anchor="e", width=10, bg=COLOR_BG).grid(row=row, column=0, sticky="e", padx=4, pady=4)
         ent = tk.Entry(parent, width=24)
         ent.insert(0, str(default))
         ent.grid(row=row, column=1, padx=4, pady=4)
