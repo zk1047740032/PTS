@@ -47,6 +47,9 @@ def _get_waverange():
         r"C:\PTS\zhongzi\SeedValue\seedvalue.csv",
         row_idx=1, col_idx=4, cast=float, fallback="(未读取到电流数据)",
     )
+    if not isinstance(wavelength, (int, float)):
+        # 文件缺失时 fallback 为字符串，直接返回占位文本，避免 str 与 int 比较报错
+        return wavelength
     if wavelength < 1200: return f"{wavelength-0.35:.2f} ~ {wavelength+0.35:.2f}"
     else: return f"{wavelength-0.5:.2f} ~ {wavelength+0.5:.2f}"
 
@@ -58,6 +61,9 @@ def _get_hot_waverange():
         r"C:\PTS\zhongzi\SeedValue\seedvalue.csv",
         row_idx=1, col_idx=4, cast=float, fallback="未读取到电流数据",
     )
+    if not isinstance(wavelength, (int, float)):
+        # 文件缺失时 fallback 为字符串，直接返回占位文本，避免 str 与 int 比较报错
+        return wavelength
     if wavelength < 1200: return 0.7
     else: return 1
 

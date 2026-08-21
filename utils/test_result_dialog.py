@@ -67,7 +67,11 @@ class TestResultDialog:
         self._width = width
         self._height = height
 
-        self._report_data = assemble_report_data()
+        try:
+            self._report_data = assemble_report_data()
+        except Exception:
+            # 数据文件缺失/读取失败时也要保证弹窗能正常打开，测量字段显示“暂无数据”
+            self._report_data = {}
         self._entries: dict[str, tk.Entry] = {}
 
         self._create_dialog()
