@@ -57,9 +57,9 @@ class DFBLaserController:
     CMD_SET_POWER_MODE = 0x5A   # 功率模式设置 (2B Power_Set + 1B 开关)
     CMD_SET_CURRENT_SW = 0xA8   # 电流开关 (1B 开关 + 1B 保存标志)
 
-    def __init__(self, port, addr=CFG.serial.device_addr, log_func=print):
+    def __init__(self, port, addr=None, log_func=print):
         self.port = port
-        self.addr = addr
+        self.addr = addr if addr is not None else CFG.serial.device_addr
         self.log = log_func
         self.serial = None
         self._lock = threading.Lock()
@@ -67,7 +67,9 @@ class DFBLaserController:
         self._wave_t_index = None   # Wave_T_index（2B，符号未定）
         self._wave_t_offset = None  # Wave_T_offset（4B，符号未定）
 
-    def open(self, timeout_s=CFG.serial.timeout_s):
+    def open(self, timeout_s=None):
+        if timeout_s is None:
+            timeout_s = CFG.serial.timeout_s
         self.serial = serial.Serial(
             port=self.port,
             baudrate=CFG.serial.baudrate,

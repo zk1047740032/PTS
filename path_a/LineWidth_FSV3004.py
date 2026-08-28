@@ -54,17 +54,21 @@ class SignalGenerator(VisaInstrument):
         """
         super().__init__(log_func=log_callback, timeout_ms=CFG.timing.visa_default_ms)
 
-    def connect(self, ip_address, max_retries=CFG.linewidth.connect_max_retries, retry_interval=CFG.linewidth.connect_retry_interval_s):
+    def connect(self, ip_address, max_retries=None, retry_interval=None):
         """
         连接信号发生器（添加重试机制）
 
         参数:
             ip_address (str): 信号发生器的 IP 地址
-            max_retries (int, optional): 最大重试次数，默认3次
-            retry_interval (int, optional): 重试间隔时间（秒），默认2秒
+            max_retries (int, optional): 最大重试次数，默认取 CFG.linewidth.connect_max_retries
+            retry_interval (int, optional): 重试间隔时间（秒），默认取 CFG.linewidth.connect_retry_interval_s
         返回:
             bool: 连接成功返回 True，失败返回 False
         """
+        if max_retries is None:
+            max_retries = CFG.linewidth.connect_max_retries
+        if retry_interval is None:
+            retry_interval = CFG.linewidth.connect_retry_interval_s
         ok = super().connect(
             visa_address(ip_address, kind="tcpip_instr"),
             max_retries=max_retries,

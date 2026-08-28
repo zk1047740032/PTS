@@ -97,7 +97,6 @@ PARAM_SCHEMA: OrderedDict[str, OrderedDict[str, list[tuple[str, str]]]] = Ordere
         ]),
         ("系统路径", [
             ("sys_paths.wlm_dll",            "波长计 DLL"),
-            ("sys_paths.arial_font",         "Arial 字体"),
             ("sys_paths.instrument_temp_png", "线宽截图临时路径"),
             ("sys_paths.rin_temp_png",       "RIN 截图临时路径"),
         ]),
@@ -119,24 +118,12 @@ PARAM_SCHEMA: OrderedDict[str, OrderedDict[str, list[tuple[str, str]]]] = Ordere
 
     # ======================== RIN (path_a/Rin_FSV3004.py) ========================
     ("RIN", OrderedDict([
-        ("RIN 测量 — DC / 放大", [
-            ("rin.dc_internal", "内部 DC 值 (公式用)"),
-            ("rin.dc_initial",  "GUI 默认 DC 值"),
+        ("RIN 测量 — 放大", [
             ("rin.amplification", "放大倍数"),
-            ("rin.sweep_points",  "扫描点数"),
         ]),
         ("RIN 测量 — 弛豫振荡峰值搜索", [
             ("rin.relax_start_hz",  "搜索起始频率 (Hz)"),
             ("rin.relax_stop_hz",   "搜索终止频率 (Hz)"),
-            ("rin.peak_min_points", "峰值最小点数"),
-        ]),
-        ("RIN 频段 (segments)", [
-            ("rin.segments[0]", "段1: 10–100Hz, RBW=5, Avg=20"),
-            ("rin.segments[1]", "段2: 100–1kHz, RBW=5, Avg=20"),
-            ("rin.segments[2]", "段3: 1k–10kHz, RBW=30, Avg=20"),
-            ("rin.segments[3]", "段4: 10k–100kHz, RBW=30, Avg=20"),
-            ("rin.segments[4]", "段5: 100k–1MHz, RBW=30, Avg=20"),
-            ("rin.segments[5]", "段6: 1M–10MHz, RBW=30, Avg=20"),
         ]),
         ("背景噪声测量", [
             ("bg_noise.start_freq", "起始频率 (Hz)"),
@@ -157,8 +144,6 @@ PARAM_SCHEMA: OrderedDict[str, OrderedDict[str, list[tuple[str, str]]]] = Ordere
             ("linewidth.m1_position_mhz","M1 位置 (MHz)"),
             ("linewidth.center_freq_mhz","中心频率 (MHz)"),
             ("linewidth.n_db_down",      "N dB down"),
-            ("linewidth.sweep_points",   "扫描点数"),
-            ("linewidth.avg_count",      "平均次数"),
         ]),
         ("信号发生器额外测试", [
             ("linewidth.extra_span",   "额外测试 Span (kHz)"),
@@ -170,7 +155,6 @@ PARAM_SCHEMA: OrderedDict[str, OrderedDict[str, list[tuple[str, str]]]] = Ordere
         ("连接 / 重试", [
             ("linewidth.connect_max_retries",        "连接最大重试次数"),
             ("linewidth.connect_retry_interval_s",   "连接重试间隔 (秒)"),
-            ("linewidth.ndbdown_read_timeout_ms",    "N dB down 读取超时 (ms)"),
             ("linewidth.save_data_max_retries",      "保存数据最大重试"),
             ("linewidth.reconnect_delay_s",          "重连延时 (秒)"),
             ("linewidth.signal_stabilize_s",         "信号稳定等待 (秒)"),
@@ -214,7 +198,6 @@ PARAM_SCHEMA: OrderedDict[str, OrderedDict[str, list[tuple[str, str]]]] = Ordere
         ]),
         ("超时 / 重试", [
             ("spectrum_snr.visa_timeout_s",        "VISA 超时 (秒)"),
-            ("spectrum_snr.screenshot_timeout_ms", "截图超时 (ms)"),
             ("spectrum_snr.query_retries",         "查询重试次数"),
             ("spectrum_snr.query_retry_delay_s",   "查询重试间隔 (秒)"),
         ]),
@@ -240,8 +223,6 @@ PARAM_SCHEMA: OrderedDict[str, OrderedDict[str, list[tuple[str, str]]]] = Ordere
         ("1.5μm — 温度扫描", [
             ("single_freq.temp_max_1_5um",      "温度上限 (°C)"),
             ("single_freq.temp_min_1_5um",      "温度下限 (°C)"),
-            ("single_freq.temp_step_1_5um",     "温度步长 (°C)"),
-            ("single_freq.temp_interval_1_5um", "温度变化间隔 (秒)"),
         ]),
         ("1.5μm — 电流扫描", [
             ("single_freq.cur_max_1_5um",      "电流上限 (mA)"),
@@ -269,7 +250,6 @@ PARAM_SCHEMA: OrderedDict[str, OrderedDict[str, list[tuple[str, str]]]] = Ordere
         ]),
         ("超时", [
             ("single_freq.sa_timeout_s",        "频谱仪超时 (秒)"),
-            ("single_freq.query_opc_timeout_s", "OPC 超时 (秒)"),
             ("single_freq.sweep_timeout_ms",    "扫描超时 (ms)"),
         ]),
     ])),
@@ -279,8 +259,6 @@ PARAM_SCHEMA: OrderedDict[str, OrderedDict[str, list[tuple[str, str]]]] = Ordere
         ("测量配置", [
             ("power.burnin_header_lines",   "烤机 CSV 表头行数"),
             ("power.burnin_power_column",   "烤机 功率列名"),
-            ("power.output_filename",       "输出文件名"),
-            ("power.burnin_result_filename","烤机结果文件名"),
             ("power.fallback_save_dir",     "回退保存目录"),
         ]),
     ])),
@@ -301,21 +279,9 @@ PARAM_SCHEMA: OrderedDict[str, OrderedDict[str, list[tuple[str, str]]]] = Ordere
             ("wavelength.sweep_text",        "变参测试参数 (多行)"),
             ("wavelength.modulation_time_s", "调制时间 (秒)"),
         ]),
-        ("信号发生器默认", [
-            ("wavelength.sig_gen_default_waveform", "默认波形"),
-            ("wavelength.sig_gen_default_freq",     "默认频率 (Hz)"),
-            ("wavelength.sig_gen_default_volt",     "默认电压 (Vpp)"),
-            ("wavelength.sig_gen_default_offset",   "默认偏置 (Vdc)"),
+        ("信号发生器连接", [
             ("wavelength.sig_gen_connect_retries",  "连接重试次数"),
             ("wavelength.sig_gen_connect_interval", "连接重试间隔 (秒)"),
-        ]),
-        ("波长计 — DLL 参数", [
-            ("wavelength.exposure_ms",           "曝光时间 (ms)"),
-            ("wavelength.wait_event_timeout_ms", "事件等待超时 (ms)"),
-            ("wavelength.instantiate_rfc",       "RFC"),
-            ("wavelength.instantiate_mode",      "Mode"),
-            ("wavelength.instantiate_p1",        "P1"),
-            ("wavelength.instantiate_p2",        "P2"),
         ]),
         ("pywinauto 坐标 / 搜索", [
             ("wavelength.wlm_window_title",         "波长计窗口标题 (正则)"),
@@ -344,17 +310,21 @@ PARAM_SCHEMA: OrderedDict[str, OrderedDict[str, list[tuple[str, str]]]] = Ordere
         ]),
         ("窗口操作 (点击/等待)", [
             ("phase_noise.click_retries",         "点击重试次数"),
-            ("phase_noise.click_delay_s",         "点击间隔 (秒)"),
-            ("phase_noise.launch_wait_s",         "启动等待 (秒)"),
             ("phase_noise.post_launch_wait_s",    "启动后等待 (秒)"),
             ("phase_noise.click_retry_delay_s",   "重试间隔 (秒)"),
             ("phase_noise.check_interval_s",      "检查间隔 (秒)"),
-            ("phase_noise.click_coords",          "点击坐标 (x,y)"),
-            ("phase_noise.target_window_class",   "目标窗口类名"),
-            ("phase_noise.target_window_title",   "目标窗口标题"),
         ]),
     ])),
 ])
+
+
+# 面板当前暴露的全部参数键；保存时据此清理已下线参数在 JSON 中的历史残留
+_SCHEMA_KEYS = {
+    key
+    for sections in PARAM_SCHEMA.values()
+    for fields in sections.values()
+    for key, _ in fields
+}
 
 
 # ================================================================
@@ -458,6 +428,11 @@ def _coerce_value(value_str: str, old_val):
                         pass
             result.append(part)
         return tuple(result)
+    if isinstance(old_val, Path):
+        # dirs.* 目录字段是 pathlib.Path，必须还原为 Path，
+        # 否则消费处 CFG.dirs.xxx / "file" 的拼接会抛 TypeError
+        stripped = value_str.strip()
+        return Path(stripped) if stripped else old_val
     # 默认保持字符串
     return value_str.strip()
 
@@ -796,6 +771,8 @@ class ConfigParamsPanel:
         # 合并已有覆盖：加载旧文件 → 更新本次改动 → 写回
         merged = load_user_overrides()
         merged.update(new_overrides)
+        # 清理已从面板下线的参数键，避免 JSON 残留僵尸配置
+        merged = {k: v for k, v in merged.items() if k in _SCHEMA_KEYS}
         save_user_overrides(merged)
         # 立即应用到 CFG
         for key, value_str in new_overrides.items():

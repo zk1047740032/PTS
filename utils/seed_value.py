@@ -30,14 +30,16 @@ class DFBLaserController:
     CMD_REALTIME = 0xA9   # 实时查询 → 响应 0xB7
     CMD_SYSTEM_INFO = 0xAA  # 系统信息查询 → 响应 0xB0
 
-    def __init__(self, port, addr=CFG.serial.device_addr, log_func=print):
+    def __init__(self, port, addr=None, log_func=print):
         self.port = port
-        self.addr = addr
+        self.addr = addr if addr is not None else CFG.serial.device_addr
         self.log = log_func
         self.serial = None
         self._lock = threading.Lock()
 
-    def open(self, timeout_s=CFG.serial.timeout_s):
+    def open(self, timeout_s=None):
+        if timeout_s is None:
+            timeout_s = CFG.serial.timeout_s
         self.serial = serial.Serial(
             port=self.port, baudrate=CFG.serial.baudrate, timeout=timeout_s,
             bytesize=serial.EIGHTBITS, parity=serial.PARITY_NONE,
@@ -223,7 +225,7 @@ class SeedParamsPanel:
                  fg=COLOR_TEXT_SECONDARY, bg=_ROW_BG_ODD,
                  width=12, anchor="e").pack(side=tk.LEFT, padx=(10, 8), pady=4)
 
-        self.addr_var = tk.StringVar(value='100')
+        self.addr_var = tk.StringVar(value=str(CFG.serial.device_addr))
         addr_border = tk.Frame(row2, bg=COLOR_ENTRY_BORDER, height=28)
         addr_border.pack(side=tk.LEFT, pady=3)
         tk.Entry(addr_border, textvariable=self.addr_var, width=6,

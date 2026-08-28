@@ -300,17 +300,19 @@ class PhaseNoiseGUI(BaseTestGUI):
             # 一键测试模式：自动关闭窗口，触发进程退出
             self.auto_close(CFG.timing.auto_close_long_ms)
 
-    def _interruptible_sleep(self, seconds: float, check_interval: float = CFG.phase_noise.check_interval_s) -> bool:
+    def _interruptible_sleep(self, seconds: float, check_interval: Optional[float] = None) -> bool:
         """
         可中断的睡眠（转调基类 interruptible_sleep，行为与原实现一致）
 
         参数:
             seconds: 总睡眠时间（秒）
-            check_interval: 检查间隔（秒）
+            check_interval: 检查间隔（秒），缺省取 CFG.phase_noise.check_interval_s
 
         返回:
             bool: True表示正常完成，False表示被中断
         """
+        if check_interval is None:
+            check_interval = CFG.phase_noise.check_interval_s
         return self.interruptible_sleep(seconds, check_interval)
 
     # run() 复用基类 BaseTestGUI.run（启动 mainloop）

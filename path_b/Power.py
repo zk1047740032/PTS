@@ -42,19 +42,21 @@ class PowerMeterController(VisaInstrument):
     不调用 super().connect()，以保证功率计通信行为与原版一致（零行为变更）。
     self.resource 为业务字段，对应基类 self.address。
     """
-    def __init__(self, resource: str, log_func=print, timeout_ms: int = CFG.timing.visa_short_ms):
+    def __init__(self, resource: str, log_func=print, timeout_ms: Optional[int] = None):
         """
         Initialize a PowerMeterController.
 
         Args:
             resource (str): VISA resource string identifying the power meter (e.g., 'USB::0x1234::0x5678::INSTR').
             log_func (callable): Logging function used to report status and errors. Defaults to print.
-            timeout_ms (int): Timeout in milliseconds for VISA operations. Defaults to 5000.
+            timeout_ms (int): Timeout in milliseconds for VISA operations. Defaults to CFG.timing.visa_short_ms.
 
         The controller creates a PyVISA ResourceManager and will open the
         specified instrument resource when :meth:`connect` is called.  The
         instance is stored in ``self.inst`` for subsequent commands.
         """
+        if timeout_ms is None:
+            timeout_ms = CFG.timing.visa_short_ms
         super().__init__(log_func=log_func, address=resource, timeout_ms=timeout_ms)
         self.resource = resource  # 业务字段，对应基类 self.address
 

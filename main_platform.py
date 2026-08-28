@@ -217,12 +217,6 @@ MODULE_GROUPS = {
     "光路B": [name for name, info in MODULE_MAP.items() if info["group"] == "path_b"],
 }
 
-# ==========================================
-# 光开关配置
-# ==========================================
-OPTICAL_SWITCH_VISA = CFG.usb.optical_switch
-CHANNEL_SWITCH_DELAY = CFG.timing.channel_switch_delay_s
-
 class IntegratedPlatform:
     """
     集成测试平台主类
@@ -264,7 +258,7 @@ class IntegratedPlatform:
 
         # 初始化光开关（不自动连接，等一键测试时再连接）
         self.optical_switch = OpticalSwitch(
-            OPTICAL_SWITCH_VISA,
+            CFG.usb.optical_switch,
             log_func=lambda msg: self.log("光开关", msg)
         )
 
@@ -1040,7 +1034,7 @@ class IntegratedPlatform:
                 self.log("光开关", f"通道切换失败: {e}", "error")
                 # 切换失败不阻断流程，用户可能手动切换了
 
-            time.sleep(CHANNEL_SWITCH_DELAY)
+            time.sleep(CFG.timing.channel_switch_delay_s)
 
             # 2. 并行启动该通道所有模块（不含延迟模块）
             for name in modules:

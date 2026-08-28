@@ -78,18 +78,22 @@ class SignalGenerator(VisaInstrument):
         """
         super().__init__(log_func=log_callback, timeout_ms=CFG.timing.visa_default_ms)
 
-    def connect(self, ip_address: str, max_retries: int = CFG.wavelength.sig_gen_connect_retries, retry_interval: int = CFG.wavelength.sig_gen_connect_interval) -> bool:
+    def connect(self, ip_address: str, max_retries: Optional[int] = None, retry_interval: Optional[int] = None) -> bool:
         """
         连接信号源（带重试机制）
 
         参数:
             ip_address (str): 信号源的IP地址
-            max_retries (int, optional): 最大重试次数
-            retry_interval (int, optional): 重试间隔时间（秒）
+            max_retries (int, optional): 最大重试次数，默认取 CFG.wavelength.sig_gen_connect_retries
+            retry_interval (int, optional): 重试间隔时间（秒），默认取 CFG.wavelength.sig_gen_connect_interval
 
         返回:
             bool: 连接成功返回True，失败返回False
         """
+        if max_retries is None:
+            max_retries = CFG.wavelength.sig_gen_connect_retries
+        if retry_interval is None:
+            retry_interval = CFG.wavelength.sig_gen_connect_interval
         ok = super().connect(
             visa_address(ip_address, kind="tcpip_instr"),
             max_retries=max_retries,

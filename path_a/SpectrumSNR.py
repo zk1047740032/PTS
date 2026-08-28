@@ -40,7 +40,11 @@ class SpectrumSNR(VisaInstrument):
         self.osa = None  # self.inst 的业务别名
 
     # --- 小工具：带重试的查询 ---
-    def _query(self, cmd, retries=CFG.spectrum_snr.query_retries, delay=CFG.spectrum_snr.query_retry_delay_s):
+    def _query(self, cmd, retries=None, delay=None):
+        if retries is None:
+            retries = CFG.spectrum_snr.query_retries
+        if delay is None:
+            delay = CFG.spectrum_snr.query_retry_delay_s
         last_err = None
         for i in range(1, retries + 1):
             try:

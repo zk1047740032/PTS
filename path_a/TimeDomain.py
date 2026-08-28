@@ -155,9 +155,13 @@ class TimeDomain(VisaInstrument):
         self.gen.write(f":OUTP{ch} ON")
         time.sleep(CFG.time_domain.gen_settle_s)
 
-    def read_measurement(self, cmd, channel=None, retries=CFG.time_domain.meas_retries, delay=CFG.time_domain.meas_retry_delay_s):
+    def read_measurement(self, cmd, channel=None, retries=None, delay=None):
         if channel is None:
             channel = self.params["SCOPE_CH"]
+        if retries is None:
+            retries = CFG.time_domain.meas_retries
+        if delay is None:
+            delay = CFG.time_domain.meas_retry_delay_s
         for attempt in range(1, retries+1):
             try:
                 val_str = self.scope.query(f"{cmd} {channel}").strip()
